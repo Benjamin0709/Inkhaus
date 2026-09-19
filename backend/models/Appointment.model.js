@@ -2,20 +2,14 @@ import mongoose from "mongoose";
 
 const appointmentSchema = new mongoose.Schema(
   {
-    cliente: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     artista: { type: mongoose.Schema.Types.ObjectId, ref: "Artist", required: true },
-    style: { type: mongoose.Schema.Types.ObjectId, ref: "Style" },
-    zona_corporal: { type: String, required: true },
-    tamanio: { type: String, required: true },
-    fecha_hora: { type: Date, required: true },
-    precio_cotizado: { type: Number },
-    sena_pagada: { type: Boolean, default: false },
-    estado: {
-      type: String,
-      enum: ["pendiente", "confirmada", "cancelada", "completada"],
-      default: "pendiente",
-    },
+    quote: { type: mongoose.Schema.Types.ObjectId, ref: "Quote", default: null },
+    tipo: { type: String, enum: ["ajuste", "sesion"], required: true },
+    date: { type: String, required: true }, // "YYYY-MM-DD"
+    time: { type: String, required: true }, // "HH:mm"
     notas: { type: String, default: "" },
+    estado: { type: String, enum: ["pendiente", "confirmada", "cancelada", "completada"], default: "pendiente" },
   },
   { timestamps: true }
 );
