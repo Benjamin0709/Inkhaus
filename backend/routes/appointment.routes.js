@@ -1,9 +1,9 @@
-
 import express from "express";
 import { auth, authorizeRoles } from "../middleware/auth.js";
 import Appointment from "../models/Appointment.model.js";
 import Artist from "../models/Artist.model.js";
-import { calcularabono } from "../services/abono.js";
+import { calcularAbono, sanitizeCotizacion } from "../services/abono.js";
+import { resolveQuote } from "../services/quote.js";
 import {
   sendAppointmentBookedEmail,
   sendAppointmentCancelledEmail,
@@ -145,7 +145,15 @@ router.post("/appointments", auth, async (req, res) => {
       });
     }
 
-    const duracion_min = DURACION_POR_TIPO[tipo] || 60;
+    if (tipo && !Object.hasOwn(DURACION_POR_TIPO, tipo)) {
+      return res.status(400).json({
+        success: false,
+        message: "Tipo de cita no válido",
+      });
+    }
+
+    const tipoFinal = tipo || "sesion";
+    const duracion_min = DURACION_POR_TIPO[tipoFinal];
     const fecha_hora = new Date(`${date}T${time}:00`);
 
     if (isNaN(fecha_hora.getTime())) {
@@ -192,22 +200,23 @@ router.post("/appointments", auth, async (req, res) => {
       });
     }
 
-    // Cotización del chatbot (opcional):
-    // solo se aceptan los campos conocidos.
-    const cot = req.body.cotizacion;
-
-    const cotizacion =
-      cot && Number(cot.min) > 0
-        ? {
-            zona: String(cot.zona || "").slice(0, 60),
-            tamanio: String(cot.tamanio || "").slice(0, 30),
-            estilo: String(cot.estilo || "").slice(0, 40),
-            min: Number(cot.min),
-            max: Number(cot.max) || Number(cot.min),
-          }
-        : undefined;
-
-    const tipoFinal = tipo || "sesion";
+     // Cotización del chatbot (opcional). El cliente solo indica zona y tamaño;
+    // el precio lo resuelve el servidor con la tabla del artista de ESTA cita.
+    let cotizacion;
+    const pedida = sanitizeCotizacion(req.body.cotizacion);
+    if (pedida) {
+      const precio = await resolveQuote({ artistId: artista, zona: pedida.zona, tamanio: pedida.tamanio });
+      if (precio) {
+        cotizacion = {
+          zona: pedida.zona,
+          tamanio: pedida.tamanio,
+          estilo: pedida.estilo,
+          min: precio.min,
+          max: precio.max,
+          fuente: precio.fuente,
+        };
+      }
+    }
 
     // Crear cita con cotización y cálculo del abono.
     const appointment = new Appointment({
@@ -219,7 +228,7 @@ router.post("/appointments", auth, async (req, res) => {
       notas: notas || "",
       cotizacion,
       precio_cotizado: cotizacion?.min,
-      abono_monto: calcularabono({
+      abono_monto: calcularAbono({
         tipo: tipoFinal,
         cotizacion,
       }),

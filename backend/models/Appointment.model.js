@@ -1,5 +1,17 @@
 import mongoose from "mongoose";
 
+// Cotización que el cliente obtuvo con el chatbot y llevó a la reserva.
+const cotizacionSchema = new mongoose.Schema(
+  {
+    zona: { type: String, trim: true, default: "" },
+    tamanio: { type: String, trim: true, default: "" },
+    estilo: { type: String, trim: true, default: "" },
+    min: { type: Number, required: true, min: 0 },
+    max: { type: Number, required: true, min: 0 },
+  },
+  { _id: false }
+);
+
 const appointmentSchema = new mongoose.Schema(
   {
     cliente: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -14,10 +26,16 @@ const appointmentSchema = new mongoose.Schema(
     },
     canceladaPor: { type: String, enum: ["cliente", "artista", "admin"], default: undefined },
     notas: { type: String, default: "" },
-    // Campos preparados para cuando el chatbot alimente la cita con una
-    // cotización real (TS-4 Webpay). Por ahora quedan opcionales.
+
+    // Cotización del chatbot (opcional) y precio mínimo cotizado.
+    cotizacion: { type: cotizacionSchema, default: undefined },
     precio_cotizado: { type: Number },
+    fuente: { type: String, enum: ["artista", "estudio", "estimado"], default: "estimado" },
+
+    // Abono: el monto lo calcula el servidor al crear la cita (services/abono.js).
+    abono_monto: { type: Number, min: 0 },
     abono_pagada: { type: Boolean, default: false },
+
     recordatorio_enviado: { type: Boolean, default: false },
   },
   { timestamps: true }

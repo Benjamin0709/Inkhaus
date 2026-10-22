@@ -3,7 +3,7 @@ import { auth } from "../middleware/auth.js";
 import Appointment from "../models/Appointment.model.js";
 import Payment from "../models/Payment.model.js";
 import { getWebpayTransaction } from "../config/webpay.js";
-import { calcularabono } from "../services/abono.js";
+import { calcularAbono } from "../services/abono.js";
 import { sendPaymentConfirmedEmail } from "../services/email.service.js";
 
 const router = express.Router();
@@ -27,11 +27,20 @@ router.post("/payments/create", auth, async (req, res) => {
       return res.status(400).json({ success: false, message: "Esta cita ya no admite pago" });
     }
     if (appointment.abono_pagada) {
-      return res.status(400).json({ success: false, message: "La seña de esta cita ya fue pagada" });
+      return res.status(400).json({ success: false, message: "El abono de esta cita ya fue pagado" });
     }
 
-    const amount =
-      appointment.abono_monto || calcularabono({ tipo: appointment.tipo, cotizacion: appointment.cotizacion });
+    // El monto sale siempre del servidor. Las citas antiguas sin abono_monto se calculan aquí y se guardan.
+    const amount = Math.round(
+      appointment.abono_monto || calcularAbono({ tipo: appointment.tipo, cotizacion: appointment.cotizacion })
+    );
+    if (!Number.isInteger(amount) || amount <= 0) {
+      return res.status(500).json({ success: false, message: "No se pudo calcular el abono" });
+    }
+    if (!appointment.abono_monto) {
+      appointment.abono_monto = amount;
+      await appointment.save();
+    }
     const buyOrder = newBuyOrder();
     const sessionId = appointment._id.toString();
     const returnUrl = `${BACKEND()}/api/payments/return`;
@@ -83,7 +92,13 @@ router.all("/payments/return", async (req, res) => {
     }
 
     const result = await getWebpayTransaction().commit(token_ws);
-    const aprobado = result.status === "AUTHORIZED" && result.response_code === 0;
+    // Además de la autorización, el monto y la orden confirmados por Transbank deben coincidir con lo que iniciamos.
+    const autorizado = result.status === "AUTHORIZED" && result.response_code === 0;
+    const coincide = Number(result.amount) === payment.amount && result.buy_order === payment.buyOrder;
+    if (autorizado && !coincide) {
+      console.error(`payments/return: monto u orden no coinciden (orden ${payment.buyOrder}, esperado ${payment.amount}, recibido ${result.amount})`);
+    }
+    const aprobado = autorizado && coincide;
 
     payment.status = aprobado ? "aprobado" : "rechazado";
     payment.responseCode = result.response_code;

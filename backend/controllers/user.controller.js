@@ -2,13 +2,35 @@ import User from "../models/User.model.js";
 import { sendWelcomeEmail } from "../services/email.service.js";
 
 // ─── REGISTER ─────────────────────────────────────────────
+// Solo se aceptan los campos de un registro público. Los roles NUNCA vienen
+// del cliente: toda cuenta nueva es "cliente" (el admin crea artistas aparte).
 export const createUser = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { name, lastname, phone, password } = req.body;
+    const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
+
+    if (
+      typeof name !== "string" || name.trim().length < 2 ||
+      !email ||
+      typeof password !== "string" || password.length < 8
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Nombre, correo y contraseña (mínimo 8 caracteres) son obligatorios",
+      });
+    }
+
     if (await User.findOne({ email })) {
       return res.status(400).json({ success: false, message: "El email ya está registrado" });
     }
-    const user = new User(req.body);       
+
+    const user = new User({
+      name: name.trim(),
+      lastname: typeof lastname === "string" ? lastname.trim() : "",
+      phone: typeof phone === "string" ? phone.trim() : "",
+      email,
+      password,
+    });
     await user.save();
     sendWelcomeEmail(user.email, user.name).catch(() => {});
     res.status(201).json({
@@ -18,18 +40,25 @@ export const createUser = async (req, res) => {
       user: { id: user._id, name: user.name, email: user.email, roles: user.roles },
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    if (error.code === 11000) {
+      return res.status(400).json({ success: false, message: "El email ya está registrado" });
+    }
+    if (error.name === "ValidationError") {
+      return res.status(400).json({ success: false, message: "Revisa los datos ingresados (correo o contraseña no válidos)" });
+    }
+    res.status(500).json({ success: false, message: "Error interno del servidor" });
   }
 };
 
 // ─── LOGIN ────────────────────────────────────────────────
 export const loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
+    const { email: rawEmail, password } = req.body;
+    // Solo strings: evita que un objeto (p. ej. {"$ne": ""}) llegue como filtro a MongoDB.
+    if (typeof rawEmail !== "string" || typeof password !== "string" || !rawEmail || !password) {
       return res.status(400).json({ success: false, message: "Email y contraseña son obligatorios" });
     }
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: rawEmail.trim().toLowerCase() });
     if (!user || !(await user.compararPassword(password))) {
       return res.status(400).json({ success: false, message: "Credenciales incorrectas" });
     }
@@ -153,4 +182,3 @@ export const updateMe = async (req, res) => {
     });
   }
 };
-

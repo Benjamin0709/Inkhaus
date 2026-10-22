@@ -14,11 +14,11 @@ import {
   
 } from "./emailTemplates.js";
 
-const FROM = `"${process.env.EMAIL_FROM_NAME || "Ink Haus"}" <${process.env.EMAIL_USER}>`;
+const FROM = process.env.EMAIL_FROM || `"${process.env.EMAIL_FROM_NAME || "Ink Haus"}" <${process.env.EMAIL_USER}>`;
 const STUDIO_EMAIL = "inkhausweb@gmail.com";
 
 async function send(to, { subject, html }, replyTo) {
-  if (!to) return;
+  if (!to) return false;
   try {
     await transporter.sendMail({
       from: FROM,
@@ -27,8 +27,10 @@ async function send(to, { subject, html }, replyTo) {
       html,
       ...(replyTo ? { replyTo } : {}),
     });
+    return true;
   } catch (err) {
     console.error(`Error enviando correo "${subject}" a ${to}:`, err.message);
+    return false;
   }
 }
 
