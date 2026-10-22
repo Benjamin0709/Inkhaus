@@ -73,7 +73,7 @@ function AppointmentsTab() {
 
   const handleCancel = async (c) => {
     const aviso = c.abono_pagada
-      ? "Esta cita tiene la abono pagada. La devolución se coordina con el estudio. ¿Cancelar igualmente?"
+      ? "Esta cita tiene el abono pagado. La devolución se coordina con el estudio. ¿Cancelar igualmente?"
       : "¿Cancelar esta cita?";
     if (!window.confirm(aviso)) return;
     setBusyId(c._id);
@@ -140,7 +140,7 @@ function CitaCard({ cita, busy, readOnly, onCancel, onPay }) {
   const fecha = new Date(cita.fecha_hora);
   const estado = ESTADO_LABEL[cita.estado] || ESTADO_LABEL.pendiente;
   const activa = !readOnly && ["pendiente", "confirmada"].includes(cita.estado);
-  const debeabono = activa && !cita.abono_pagada;
+  const debeAbono = activa && !cita.abono_pagada;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 p-4 border border-white/10">
@@ -155,9 +155,9 @@ function CitaCard({ cita, busy, readOnly, onCancel, onPay }) {
         </div>
         <div className="mt-1 text-[11px]">
           {cita.abono_pagada ? (
-            <span className="text-green-400">abono pagada ✓ {cita.abono_monto ? `· ${formatCLP(cita.abono_monto)}` : ""}</span>
+            <span className="text-green-400">Abono pagado ✓ {cita.abono_monto ? `· ${formatCLP(cita.abono_monto)}` : ""}</span>
           ) : cita.estado !== "cancelada" && cita.abono_monto ? (
-            <span className="text-yellow-400">abono pendiente · {formatCLP(cita.abono_monto)}</span>
+            <span className="text-yellow-400">Abono pendiente · {formatCLP(cita.abono_monto)}</span>
           ) : null}
         </div>
       </div>
@@ -165,7 +165,7 @@ function CitaCard({ cita, busy, readOnly, onCancel, onPay }) {
       <div className="flex flex-col items-end gap-2">
         <span className={`text-[10px] uppercase tracking-widest border px-2 py-1 ${estado.cls}`}>{estado.text}</span>
         <div className="flex gap-3">
-          {debeabono && (
+          {debeAbono && (
             <button onClick={onPay} disabled={busy}
               className="text-[10px] uppercase tracking-widest text-white bg-red hover:bg-red-hover px-3 py-1.5 disabled:opacity-50">
               {busy ? "..." : "Pagar abono"}
@@ -285,15 +285,15 @@ function ProfileTab() {
   const savePassword = async (e) => {
     e.preventDefault();
     setPwdMsg({ type: "", text: "" });
-    if (pwd.next.length < 8) return setPwdMsg({ type: "error", text: "La nueva contraabono debe tener al menos 8 caracteres" });
-    if (pwd.next !== pwd.confirm) return setPwdMsg({ type: "error", text: "Las contraabonos no coinciden" });
+    if (pwd.next.length < 8) return setPwdMsg({ type: "error", text: "La nueva contraseña debe tener al menos 8 caracteres" });
+    if (pwd.next !== pwd.confirm) return setPwdMsg({ type: "error", text: "Las contraseñas no coinciden" });
     setSavingPwd(true);
     try {
       await changePasswordAPI(pwd.current, pwd.next);
       setPwd({ current: "", next: "", confirm: "" });
-      setPwdMsg({ type: "ok", text: "Contraabono actualizada. Te enviamos un correo de confirmación." });
+      setPwdMsg({ type: "ok", text: "Contraseña actualizada. Te enviamos un correo de confirmación." });
     } catch (err) {
-      setPwdMsg({ type: "error", text: err.response?.data?.message || "No se pudo cambiar la contraabono" });
+      setPwdMsg({ type: "error", text: err.response?.data?.message || "No se pudo cambiar la contraseña" });
     } finally {
       setSavingPwd(false);
     }
@@ -315,14 +315,14 @@ function ProfileTab() {
       </form>
 
       <form onSubmit={savePassword} className="space-y-4">
-        <h2 className="text-xs tracking-widest uppercase text-muted">Cambiar contraabono</h2>
+        <h2 className="text-xs tracking-widest uppercase text-muted">Cambiar contraseña</h2>
         <Flash msg={pwdMsg} />
-        <input type="password" value={pwd.current} onChange={(e) => setPwd({ ...pwd, current: e.target.value })} placeholder="Contraabono actual" className={inputCls} />
-        <input type="password" value={pwd.next} onChange={(e) => setPwd({ ...pwd, next: e.target.value })} placeholder="Nueva contraabono" className={inputCls} />
-        <input type="password" value={pwd.confirm} onChange={(e) => setPwd({ ...pwd, confirm: e.target.value })} placeholder="Confirmar nueva contraabono" className={inputCls} />
+        <input type="password" value={pwd.current} onChange={(e) => setPwd({ ...pwd, current: e.target.value })} placeholder="Contraseña actual" className={inputCls} />
+        <input type="password" value={pwd.next} onChange={(e) => setPwd({ ...pwd, next: e.target.value })} placeholder="Nueva contraseña" className={inputCls} />
+        <input type="password" value={pwd.confirm} onChange={(e) => setPwd({ ...pwd, confirm: e.target.value })} placeholder="Confirmar nueva contraseña" className={inputCls} />
         <button type="submit" disabled={savingPwd}
           className="w-full py-3 text-xs tracking-widest uppercase border border-white/15 text-paper hover:border-white/30 disabled:opacity-60">
-          {savingPwd ? "Guardando..." : "Actualizar contraabono"}
+          {savingPwd ? "Guardando..." : "Actualizar contraseña"}
         </button>
       </form>
     </div>

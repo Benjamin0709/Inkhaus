@@ -18,7 +18,7 @@ const STEPS = [
   },
   {
     title: "Paga tu abono",
-    text: "Para confirmar la hora se paga una abono en línea con Webpay Plus. La abono se descuenta del valor final, y al pagarla tu cita queda confirmada automáticamente.",
+    text: "Para confirmar la hora se paga un abono en línea con Webpay Plus. El abono se descuenta del valor final, y al pagarlo tu cita queda confirmada automáticamente.",
   },
   {
     title: "Recibe tus recordatorios",
@@ -39,11 +39,11 @@ const STEPS = [
 const FAQ = [
   {
     q: "¿Puedo cambiar o cancelar mi hora?",
-    a: "Sí. Puedes cancelar desde Mi cuenta o escribirle a tu artista para reagendar. Si ya pagaste la abono, la devolución se coordina con el estudio.",
+    a: "Sí. Puedes cancelar desde Mi cuenta o escribirle a tu artista para reagendar. Si ya pagaste el abono, la devolución se coordina con el estudio.",
   },
   {
-    q: "¿Qué pasa si no pago la abono?",
-    a: "Tu cita queda registrada como pendiente, y solo se confirma cuando se paga la abono.",
+    q: "¿Qué pasa si no pago el abono?",
+    a: "Tu cita queda registrada como pendiente, y solo se confirma cuando se paga el abono.",
   },
   {
     q: "¿Puedo llevar mi propio diseño?",

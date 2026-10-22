@@ -399,9 +399,9 @@ function CitaRow({
     !readOnly &&
     ["pendiente", "confirmada"].includes(cita.estado);
 
-  // Compatibilidad con registros antiguos que usan "sena".
+  // El campo del modelo es abono_pagada; sena_* se mantiene por registros antiguos.
   const abonoPagado =
-    cita.abono_pagado ?? cita.sena_pagada ?? false;
+    cita.abono_pagada ?? cita.sena_pagada ?? false;
 
   const abonoMonto =
     cita.abono_monto ?? cita.sena_monto ?? 0;

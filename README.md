@@ -46,8 +46,10 @@ inkhaus/
 │   │   ├── abono.js          ← Cálculo del abono
 │   │   ├── email.service.js  ← Envío de correos
 │   │   ├── emailTemplates.js ← Plantillas HTML de correo
-│   │   └── reminderCron.js   ← Recordatorios de citas (09:00 diario)
-│   ├── uploads/              ← Imágenes y videos subidos (se crea solo, fuera de git)
+│   │   ├── reminderCron.js   ← Recordatorios de citas (09:00 diario)
+│   │   └── storage.js        ← Almacenamiento de archivos (disco local o Cloudinary)
+│   ├── scripts/              ← migrateUploadsToCloudinary.js (migración puntual)
+│   ├── uploads/              ← Solo en modo local: archivos subidos (se crea solo, fuera de git)
 │   └── server.js             ← Entry point
 │
 └── frontend/                 ← React 18 + Tailwind CSS (Vite)
@@ -86,6 +88,7 @@ Crea el archivo `backend/.env` (está en `.gitignore`, no lo subas al repositori
 
 ```env
 # Servidor
+NODE_ENV=development               # usa "production" en el despliegue
 PORT=8080
 FRONTEND_URL=http://localhost:5173
 BACKEND_URL=http://localhost:8080
@@ -94,13 +97,18 @@ BACKEND_URL=http://localhost:8080
 MONGO_URI=mongodb+srv://<usuario>:<clave>@<cluster>.mongodb.net
 DB_NAME=inkhaus
 
-# Autenticación
+# Autenticación (obligatorio; en producción mínimo 32 caracteres aleatorios)
 JWT_SECRET=<cadena-larga-y-aleatoria>
 
 # Correo (Gmail con contraseña de aplicación)
 EMAIL_USER=<tu-correo>@gmail.com
 EMAIL_PASS=<contraseña-de-aplicación>
 EMAIL_FROM_NAME=Ink Haus
+
+# Almacenamiento de archivos (imágenes de portafolio, fotos y video de Cuidados)
+STORAGE_DRIVER=local               # local | cloudinary  (usa cloudinary en producción)
+# UPLOADS_DIR=/data/uploads        # modo local: carpeta de un volumen persistente
+# CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>   # modo cloudinary
 
 # Webpay Plus (Transbank)
 # Por defecto usa el ambiente de integración. Para producción:
@@ -147,6 +155,47 @@ npm run preview    # sirve el build localmente
 
 ---
 
+## Almacenamiento de archivos
+
+Las imágenes de portafolio, las fotos de perfil y el video de Cuidados pasan por `services/storage.js`, que tiene dos modos según `STORAGE_DRIVER`:
+
+| Modo | Dónde se guardan | Cuándo usarlo |
+|------|------------------|---------------|
+| `local` (por defecto) | Disco del servidor, servido en `/uploads` | Desarrollo. En producción solo si `UPLOADS_DIR` apunta a un **volumen persistente**: el disco de Railway o Render se borra en cada despliegue |
+| `cloudinary` | Cloudinary (URL `https` guardada en la base de datos) | **Producción recomendada**: no depende del disco del servidor |
+
+**Configurar Cloudinary:** crea una cuenta gratuita, copia el *API Environment variable* del panel (Dashboard → Programmatic Access) y defínelo en `backend/.env`:
+
+```env
+STORAGE_DRIVER=cloudinary
+CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>
+```
+
+En este modo los archivos solo pasan por una carpeta temporal antes de subirse; las imágenes se entregan optimizadas (`f_auto,q_auto`). Al reemplazar o eliminar una pieza de portafolio, o el video de Cuidados, el archivo anterior se borra del almacenamiento. Los límites de la API son 8 MB por imagen y 60 MB por video; revisa que tu plan de Cloudinary los admita.
+
+**Migrar archivos que ya subiste en local:**
+
+```bash
+cd backend
+npm run migrate:uploads              # simulación: muestra qué subiría, no modifica nada
+npm run migrate:uploads -- --apply   # sube a Cloudinary y actualiza las URLs en la base de datos
+```
+
+El script necesita la carpeta de uploads original y no borra los archivos locales.
+
+---
+
+## Seguridad
+
+- **Autenticación:** el token JWT (8 h) se valida en cada petición contra la base de datos; si el usuario fue eliminado o desactivado, o cambió de rol, el acceso se actualiza de inmediato.
+- **Registro público:** solo crea cuentas con rol `cliente`; los roles nunca se aceptan desde el cliente.
+- **Límite de peticiones** (por IP): login (10 intentos fallidos / 15 min), registro, recuperación de contraseña, formulario de contacto y consultas del chatbot. Detrás de un proxy en producción, define `NODE_ENV=production` para que se use la IP real.
+- **Cabeceras de seguridad** con `helmet` y tamaño máximo de JSON de 100 kB.
+- **Archivos subidos:** la extensión se deduce del tipo validado y se verifica la firma real del archivo (JPG, PNG, WEBP, MP4, WEBM, MOV); lo que no coincide se rechaza y se borra.
+- **Propiedad de los recursos:** un artista solo puede editar su perfil, sus piezas de portafolio y su tabla de precios.
+
+---
+
 ## Roles disponibles
 
 | Rol      | Acceso |
@@ -165,7 +214,9 @@ El abono se calcula **siempre en el servidor** (`services/abono.js`); el cliente
 - **Sesión con cotización**: `ABONO_PORCENTAJE` % de la cotización mínima, redondeado a miles y acotado entre `ABONO_MINIMA_CLP` y `ABONO_MAXIMA_CLP`.
 - **Sesión sin cotización**: monto fijo (`ABONO_SESION_CLP`).
 
-Al aprobarse el pago, la cita pasa de `pendiente` a `confirmada`.
+La cotización del chatbot (zona, tamaño, estilo, mínimo y máximo) queda guardada en la cita y alimenta el cálculo.
+
+Al aprobarse el pago, la cita pasa de `pendiente` a `confirmada`. Antes de aprobarlo se verifica que el monto y la orden confirmados por Transbank coincidan con los que se iniciaron.
 
 ---
 
@@ -206,8 +257,8 @@ Todas las rutas cuelgan de `/api`. Las respuestas siguen el formato `{ success, 
 | PUT / DELETE | /portfolio/:id          | artista dueño / admin | Editar o eliminar pieza |
 | GET    | /styles                       | Pública           | Listar estilos |
 | POST   | /styles                       | admin             | Crear estilo |
-| POST   | /upload                       | artista / admin   | Subir imagen (JPG, PNG, WEBP; máx. 8 MB) |
-| POST   | /upload/video                 | admin             | Subir video (MP4, WEBM, MOV; máx. 60 MB) |
+| POST   | /upload                       | artista / admin   | Subir imagen (JPG, PNG, WEBP; máx. 8 MB). Devuelve `{ url }` |
+| POST   | /upload/video                 | admin             | Subir video (MP4, WEBM, MOV; máx. 60 MB). Campo `video` |
 
 ### Precios y cotización
 
@@ -215,7 +266,7 @@ Todas las rutas cuelgan de `/api`. Las respuestas siguen el formato `{ success, 
 |--------|-------------------------------|----------|-------------|
 | GET    | /pricing/quote                | Pública  | Motor de cotización (`zona_corporal`, `tamanio`, `style`, `artist`) |
 | GET    | /pricing/artist/:artistId     | Pública  | Tabla de precios de un artista |
-| PUT    | /pricing/artist/:artistId     | JWT      | Reemplazar tabla de precios del artista |
+| PUT    | /pricing/artist/:artistId     | artista dueño / admin | Reemplazar tabla de precios del artista |
 | GET / POST | /pricing                  | admin    | Listar o crear tarifas |
 | PUT / DELETE | /pricing/:id            | admin    | Editar o eliminar tarifa |
 

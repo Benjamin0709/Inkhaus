@@ -50,7 +50,7 @@ export default function BookAppointmentPage() {
   const [loadingTimes, setLoadingTimes] = useState(false);
   const [selectedTime, setSelectedTime] = useState(null);
 
-  const [tipo, setTipo] = useState("ajuste");
+  const [tipo, setTipo] = useState(() => (readPendingQuote() ? "sesion" : "ajuste"));
   const [notas, setNotas] = useState("");
 
   const [submitting, setSubmitting] = useState(false);

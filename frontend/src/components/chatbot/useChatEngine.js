@@ -274,21 +274,13 @@ export function useChatEngine({
     setBusy(true);
     setInputEnabled(false);
 
-    pushBot("Calculando cotización…");
-    await delay(500);
-
     const { zona, tamanio, estilo, artista } = selectionRef.current;
     const zonaParaTarifa = zoneBase(zona);
-
     let precio = null;
     let fuente = "estimado";
 
     try {
-      const { data } = await getQuoteAPI(
-        zonaParaTarifa,
-        tamanio,
-        estilo
-      );
+      const { data } = await getQuoteAPI(zonaParaTarifa, tamanio, artista?.id);
 
       if (data?.success && data?.info) {
         precio = {
@@ -296,7 +288,7 @@ export function useChatEngine({
           max: data.info.precio_max_clp,
         };
 
-        fuente = "db";
+        fuente = data.info.fuente || "estudio";
       }
     } catch (_error) {
       // Si no existe una tarifa o falla la API, se usa el precio estimado.

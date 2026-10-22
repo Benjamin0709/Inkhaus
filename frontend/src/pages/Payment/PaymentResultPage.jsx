@@ -11,11 +11,11 @@ const COPY = {
   },
   rechazado: {
     title: "PAGO", accent: "RECHAZADO",
-    text: "Tu banco rechazó la transacción. Tu cita sigue reservada, pero queda pendiente hasta que se pague la abono. Puedes reintentar con otra tarjeta.",
+    text: "Tu banco rechazó la transacción. Tu cita sigue reservada, pero queda pendiente hasta que se pague el abono. Puedes reintentar con otra tarjeta.",
   },
   anulado: {
     title: "PAGO", accent: "CANCELADO",
-    text: "Cancelaste el pago o se agotó el tiempo del formulario. Tu cita sigue pendiente: puedes pagar la abono cuando quieras desde Mi cuenta.",
+    text: "Cancelaste el pago o se agotó el tiempo del formulario. Tu cita sigue pendiente: puedes pagar el abono cuando quieras desde Mi cuenta.",
   },
   error: {
     title: "ALGO", accent: "SALIÓ MAL",
