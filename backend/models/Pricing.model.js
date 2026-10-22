@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 // Tabla de precios: f(zona, tamaño, estilo) = rango CLP
 const pricingSchema = new mongoose.Schema(
   {
+    artist: { type: mongoose.Schema.Types.ObjectId, ref: "Artist", index: true }, 
     style: { type: mongoose.Schema.Types.ObjectId, ref: "Style" },
     zona_corporal: { type: String, required: true, trim: true },
     tamanio: {

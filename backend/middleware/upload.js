@@ -19,3 +19,14 @@ const fileFilter = (req, file, cb) => {
 };
 
 export const upload = multer({ storage, fileFilter, limits: { fileSize: 8 * 1024 * 1024 } });
+
+const videoFilter = (req, file, cb) => {
+  const ok = ["video/mp4", "video/webm", "video/quicktime"].includes(file.mimetype);
+  cb(ok ? null : new Error("Formato de video no soportado (usa MP4 o WEBM)"), ok);
+};
+
+export const uploadVideo = multer({
+  storage,
+  fileFilter: videoFilter,
+  limits: { fileSize: 60 * 1024 * 1024 }, // 60 MB
+});

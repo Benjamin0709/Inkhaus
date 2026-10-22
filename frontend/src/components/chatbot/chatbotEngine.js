@@ -19,9 +19,16 @@ export const BASE_SIZE_OPTIONS = [
   { label: "Grande (> 15 cm)", value: "grande" },
 ];
 const MANGA_OPTION = { label: "Manga completa", value: "manga" };
-const ESPALDA_OPTION = { label: "Espalda completa", value: "espalda_completa" };
+const ESPALDA_OPTION = {
+  label: "Espalda completa",
+  value: "espalda_completa",
+};
 
-export const SIZE_OPTIONS = [...BASE_SIZE_OPTIONS, MANGA_OPTION, ESPALDA_OPTION];
+export const SIZE_OPTIONS = [
+  ...BASE_SIZE_OPTIONS,
+  MANGA_OPTION,
+  ESPALDA_OPTION,
+];
 
 const ARM_ZONES = ["Bíceps", "Antebrazo", "Muñeca"];
 const BACK_ZONES = ["Espalda alta", "Espalda baja"];
@@ -60,20 +67,34 @@ export const FALLBACK_PRICES = {
 };
 
 export const ZONE_TIPS = {
-  Cabeza: "Dolor alto y cicatrización especial — no es la mejor opción para un primer tatuaje.",
-  Cuello: "Piel sensible, dolor medio-alto. Muy visible, conviene pensarlo con calma.",
-  Pecho: "Dolor medio. Buena superficie para piezas grandes y con detalle.",
-  "Espalda alta": "Dolor bajo-medio. Ideal para piezas grandes tipo espalda completa.",
-  Abdomen: "Dolor medio, algo más sensible cerca de las costillas.",
-  "Espalda baja": "Dolor bajo. Clásica y versátil para varios tamaños.",
-  Cadera: "Dolor medio. Sigue la curva natural del cuerpo, linda para diseños orgánicos.",
-  Bíceps: "Dolor bajo. Una de las zonas más elegidas para un primer tatuaje.",
-  Antebrazo: "Dolor bajo. Muy versátil y con excelente visibilidad.",
-  Muñeca: "Piel fina y hueso cerca de la superficie: dolor medio-alto. Mejor para diseños pequeños.",
-  Mano: "Dolor alto y la tinta se desgasta más rápido — puede necesitar retoques a futuro.",
-  Muslo: "Dolor bajo. Excelente superficie para piezas grandes o muy detalladas.",
-  Pantorrilla: "Dolor bajo-medio. Buena para diseños verticales o de gran tamaño.",
-  Pie: "Dolor alto y cicatrización más lenta por el roce del calzado.",
+  Cabeza:
+    "Dolor alto y cicatrización especial — no es la mejor opción para un primer tatuaje.",
+  Cuello:
+    "Piel sensible, dolor medio-alto. Muy visible, conviene pensarlo con calma.",
+  Pecho:
+    "Dolor medio. Buena superficie para piezas grandes y con detalle.",
+  "Espalda alta":
+    "Dolor medio-alto. Ideal para piezas grandes tipo espalda completa.",
+  Abdomen:
+    "Dolor medio, algo más sensible cerca de las costillas.",
+  "Espalda baja":
+    "Dolor medio. Clásica y versátil para varios tamaños.",
+  Cadera:
+    "Dolor medio. Sigue la curva natural del cuerpo, linda para diseños orgánicos.",
+  Bíceps:
+    "Dolor bajo. Una de las zonas más elegidas para un primer tatuaje.",
+  Antebrazo:
+    "Dolor bajo. Muy versátil y con excelente visibilidad.",
+  Muñeca:
+    "Piel fina y hueso cerca de la superficie: dolor medio-alto. Mejor para diseños pequeños.",
+  Mano:
+    "Dolor alto y la tinta se desgasta más rápido — puede necesitar retoques a futuro.",
+  Muslo:
+    "Dolor bajo. Excelente superficie para piezas grandes o muy detalladas.",
+  Pantorrilla:
+    "Dolor bajo-medio. Buena para diseños verticales o de gran tamaño.",
+  Pie:
+    "Dolor alto y cicatrización más lenta por el roce del calzado.",
 };
 
 export function zoneBase(zona) {
@@ -88,23 +109,35 @@ export function formatCLP(n) {
   return `$${Number(n).toLocaleString("es-CL")} CLP`;
 }
 
-function normalizeStyle(s) {
-  return (s || "").trim().toLowerCase();
+function normalizeStyle(text) {
+  return String(text || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 /**
- * Filtra la lista de artistas (respuesta real de /api/artists) según el
- * estilo elegido en el chat, comparando contra `especialidades`.
- * No auto-asigna: devuelve TODOS los que calzan para que el usuario elija.
+ * Filtra artistas según sus especialidades.
+ * Tolera diferencias de mayúsculas, acentos y espacios.
  */
 export function matchArtistsByStyle(artistList, estilo) {
   const target = normalizeStyle(estilo);
-  return (artistList || []).filter((a) =>
-    (a.especialidades || []).some((e) => normalizeStyle(e) === target)
+
+  if (!target) return [];
+
+  return (artistList || []).filter((artist) =>
+    (Array.isArray(artist.especialidades) ? artist.especialidades : [])
+      .some((especialidad) => normalizeStyle(especialidad) === target)
   );
 }
 
-// (Preparado para el punto 4, aún no se usa)
+/**
+ * Construye una URL para consultar el portafolio de un artista.
+ */
 export function portfolioUrlForArtist(artist) {
   const params = new URLSearchParams();
   if (artist?.id) params.set("artist", artist.id);
@@ -112,28 +145,46 @@ export function portfolioUrlForArtist(artist) {
   return `/?${params.toString()}#portfolio`;
 }
 
-// Opción para volver a elegir la zona sin reiniciar toda la conversación
 export const CAMBIAR_ZONA = "Elegir otra zona";
 
-// Pasos de la conversación (para la barra de progreso del header)
-export const STEPS = ["welcome", "zona", "tamanio", "estilo", "artista", "cotizacion"];
+export const STEPS = [
+  "welcome",
+  "zona",
+  "tamanio",
+  "estilo",
+  "artista",
+  "cotizacion",
+];
+
 export const TOTAL_STEPS = STEPS.length;
 
 // ─────────────────────────────────────────────────────────────────────────
-// Base de conocimiento simple para responder consultas libres del usuario
-// sin necesidad de derivarlas a un humano. No es IA: son coincidencias de
-// palabras clave sobre preguntas frecuentes reales del rubro.
+// BASE DE CONOCIMIENTO: PREGUNTAS FRECUENTES
 // ─────────────────────────────────────────────────────────────────────────
 export const FAQ_KB = [
   {
-    keywords: ["dolor", "duele", "doloroso", "duela"],
+    keywords: [
+      "dolor",
+      "duele",
+      "es doloroso",
+      "duela",
+      "me duele",
+      "duele mucho",
+    ],
     answer:
-      "El dolor depende mucho de la zona: costillas, muñeca y pies son de las más sensibles; bíceps, antebrazo, pantorrilla y muslo son de las menos dolorosas. Cuando elijas la zona en el modelo 3D te muestro el nivel de dolor específico.",
+      "El dolor depende de la zona del cuerpo y de cada persona. Cuando elijas la zona en el modelo 3D, te mostraré información específica para orientarte.",
   },
   {
-    keywords: ["cuidado", "cicatriz", "sanar", "curacion", "curación", "post", "cuido"],
+    keywords: [
+      "cuidados del tatuaje",
+      "cuidar el tatuaje",
+      "cuidado del tatuaje",
+      "cuidados despues del tatuaje",
+      "como cuidar mi tatuaje",
+      "cicatrizacion del tatuaje",
+    ],
     answer:
-      "El cuidado post-tatuaje típico es: lavar con jabón neutro 2-3 veces al día los primeros días, aplicar crema cicatrizante sin perfume, evitar sol directo y piscina/mar por al menos 2 semanas, y no rascar la piel cuando empiece a pelar.",
+      "Sigue las indicaciones de cuidado que te entregue tu artista y consulta con el estudio si tienes dudas sobre la cicatrización.",
   },
   {
     keywords: ["anticipo", "seña", "abono", "pagar con"],
@@ -141,55 +192,346 @@ export const FAQ_KB = [
       "Para confirmar una cita se solicita un anticipo mediante Webpay Plus, que se descuenta del valor final del tatuaje al momento de la sesión.",
   },
   {
-    keywords: ["horario", "atienden", "abren", "atencion", "atención"],
-    answer: "El estudio atiende de martes a sábado, de 11:00 a 20:00 hrs. El horario exacto con cada artista se coordina al agendar.",
+    keywords: [
+      "horario",
+      "atienden",
+      "abren",
+      "atencion",
+      "dias",
+    ],
+    answer:
+      "InkHaus atiende de lunes a sábado. La disponibilidad y el horario se coordinan según cada artista al momento de agendar una cita.",
   },
   {
-    keywords: ["ubicacion", "ubicación", "direccion", "dirección", "donde estan", "dónde están", "donde queda"],
-    answer: "Estamos en Santiago, Chile. La dirección exacta se comparte al confirmar tu cita.",
+    keywords: [
+      "ubicacion",
+      "direccion",
+      "donde estan",
+      "donde queda",
+    ],
+    answer:
+      "Estamos en Santiago, Chile. La dirección exacta se comparte al confirmar tu cita.",
   },
   {
-    keywords: ["primera vez", "primer tatuaje", "es mi primera", "nunca me he tatuado"],
+    keywords: [
+      "primera vez",
+      "primer tatuaje",
+      "es mi primera",
+      "nunca me he tatuado",
+    ],
     answer:
       "Para un primer tatuaje recomendamos zonas de dolor bajo como bíceps, antebrazo o pantorrilla, y tamaños pequeños o medianos. ¡Puedo guiarte en la cotización cuando quieras!",
   },
   {
-    keywords: ["edad", "menor de edad", "menores"],
-    answer: "Se requiere ser mayor de 18 años, o contar con autorización notarial de un apoderado si eres menor de edad.",
+    keywords: [
+      "edad",
+      "menor de edad",
+      "menores",
+      "mayor de edad",
+      "18 años",
+      "apoderado",
+      "autorizacion",
+      "padre",
+      "madre",
+      "tutor",
+      "responsable",
+      "notarial",
+      "notaria",
+    ],
+    answer:
+      "Para tatuarte en InkHaus debes ser mayor de 18 años o contar con autorización notarial de tu apoderado si eres menor de edad.",
   },
   {
-    keywords: ["retoque", "retocar"],
-    answer: "Los retoques dentro de los primeros 30 días por pérdida normal de tinta son sin costo. Pasado ese plazo se cotiza aparte.",
+    keywords: [
+      "retoque",
+      "retocar",
+      "retoques",
+      "arreglar",
+      "corregir",
+      "reparar",
+      "se perdio tinta",
+      "se borro",
+      "se desvanecio",
+    ],
+    answer:
+      "Los retoques en InkHaus aplican únicamente a personas que se hayan tatuado en nuestro estudio y solo cuando exista pérdida de tinta propia del proceso normal de cicatrización. No se incluyen otros motivos de retoque.",
   },
   {
     keywords: ["embarazo", "embarazada", "lactancia"],
-    answer: "No se realizan tatuajes durante el embarazo ni la lactancia, por seguridad de la piel y cicatrización.",
+    answer:
+      "No se realizan tatuajes durante el embarazo ni la lactancia, por seguridad de la piel y cicatrización.",
+  },
+  {
+    keywords: ["alergia", "alergico", "reaccion"],
+    answer:
+      "Es poco común pero puede ocurrir una reacción alérgica a la tinta, especialmente a pigmentos rojos. Si tienes antecedentes de alergias de piel, coméntalo con tu artista antes de la sesión.",
+  },
+  {
+    keywords: ["cover", "tapar", "cubrir tatuaje", "cover up"],
+    answer:
+      "Sí, hacemos cover-ups (tatuajes que cubren uno anterior). El resultado depende del tamaño, color y densidad del tatuaje original; es mejor evaluarlo con fotos durante la cotización.",
+  },
+  {
+    keywords: [
+      "cuanto dura",
+      "tiempo de sesion",
+      "cuantas horas",
+    ],
+    answer:
+      "Depende del tamaño y detalle: un tatuaje pequeño puede tomar entre 1 y 2 horas, mientras que piezas grandes o muy detalladas pueden requerir varias sesiones de 4 a 6 horas cada una.",
+  },
+  {
+    keywords: [
+      "diseño propio",
+      "mi propio diseño",
+      "traigo mi diseño",
+      "dibujo propio",
+    ],
+    answer:
+      "¡Por supuesto! Puedes traer tu propio diseño o referencia, y el artista lo adapta a su estilo y a la anatomía de la zona elegida. Te confirmará si es posible hacerlo antes de tatuarlo.",
   },
 ];
 
-/** Busca una respuesta en la base de conocimiento a partir de texto libre. */
+// ─────────────────────────────────────────────────────────────────────────
+// NORMALIZACIÓN Y COINCIDENCIA DE TEXTO
+// ─────────────────────────────────────────────────────────────────────────
+
+function normalizeFaqText(text) {
+  return String(text || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[¿?¡!.,;:()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function matchesFaqKeyword(text, keyword) {
+  const normalizedKeyword = normalizeFaqText(keyword);
+
+  if (!normalizedKeyword) return false;
+
+  return (` ${text} `).includes(` ${normalizedKeyword} `);
+}
+
+/**
+ * Busca una respuesta en las preguntas frecuentes.
+ * Devuelve null si no encuentra coincidencias.
+ */
 export function findFaqAnswer(text) {
-  const t = (text || "").toLowerCase();
+  const normalizedText = normalizeFaqText(text);
+
+  if (!normalizedText) return null;
+
   for (const item of FAQ_KB) {
-    if (item.keywords.some((k) => t.includes(k))) return item.answer;
+    const matches = item.keywords.some((keyword) =>
+      matchesFaqKeyword(normalizedText, keyword)
+    );
+
+    if (matches) return item.answer;
   }
+
   return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Detección de intención de cotización: si el usuario escribe directamente
-// algo como "cuánto cuesta un tatuaje" o "quiero cotizar", lo llevamos al
-// flujo guiado de zona/tamaño/estilo en vez de darle solo una respuesta de
-// texto genérica.
+// DETECCIÓN DE CONSULTAS SOBRE ARTISTAS, ESTILOS Y DISEÑOS
+// Estas funciones reconocen intenciones; no llaman a las API.
+// ─────────────────────────────────────────────────────────────────────────
+
+const ARTIST_QUERY_KEYWORDS = [
+  "artista",
+  "artistas",
+  "tatuador",
+  "tatuadores",
+  "tatuadora",
+  "tatuadoras",
+  "quien tatua",
+  "quienes tatúan",
+  "quienes trabajan en inkhaus",
+  "equipo de tatuadores",
+  "equipo de artistas",
+];
+
+const STYLE_QUERY_KEYWORDS = [
+  "estilo",
+  "estilos",
+  "que estilos tienen",
+  "que estilos trabajan",
+  "estilos disponibles",
+  "tipos de tatuajes",
+  "tecnicas de tatuaje",
+  "tecnica de tatuaje",
+];
+
+const DESIGN_QUERY_KEYWORDS = [
+  "diseño",
+  "diseños",
+  "diseno",
+  "disenos",
+  "referencia",
+  "referencias",
+  "portafolio",
+  "portafolios",
+  "galeria",
+  "galerias",
+  "ver trabajos",
+  "ver tatuajes",
+  "ideas para tatuajes",
+  "inspiracion",
+];
+
+/**
+ * Devuelve true si el usuario pregunta por los artistas del estudio.
+ */
+export function findArtistQuery(text) {
+  const normalizedText = normalizeFaqText(text);
+
+  if (!normalizedText) return false;
+
+  return ARTIST_QUERY_KEYWORDS.some((keyword) =>
+    matchesFaqKeyword(normalizedText, keyword)
+  );
+}
+
+/**
+ * Devuelve true si el usuario pregunta por los estilos disponibles.
+ */
+export function findStyleQuery(text) {
+  const normalizedText = normalizeFaqText(text);
+
+  if (!normalizedText) return false;
+
+  const asksAboutStyles = STYLE_QUERY_KEYWORDS.some((keyword) =>
+    matchesFaqKeyword(normalizedText, keyword)
+  );
+
+  // También detecta preguntas como:
+  // "¿Trabajan anime?" o "¿Hacen realismo?"
+  const asksAboutAStyle = STYLE_OPTIONS.some((style) =>
+    matchesFaqKeyword(normalizedText, style)
+  );
+
+  return asksAboutStyles || asksAboutAStyle;
+}
+
+/**
+ * Devuelve true si el usuario quiere ver diseños o referencias.
+ */
+export function findDesignQuery(text) {
+  const normalizedText = normalizeFaqText(text);
+
+  if (!normalizedText) return false;
+
+  return DESIGN_QUERY_KEYWORDS.some((keyword) =>
+    matchesFaqKeyword(normalizedText, keyword)
+  );
+}
+
+/**
+ * Devuelve el estilo de STYLE_OPTIONS que se menciona en el mensaje.
+ * Si no menciona uno, devuelve null.
+ */
+export function findMentionedStyle(text) {
+  const normalizedText = normalizeFaqText(text);
+
+  if (!normalizedText) return null;
+
+  return (
+    STYLE_OPTIONS.find((style) =>
+      matchesFaqKeyword(normalizedText, style)
+    ) || null
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// RESPUESTAS DE CONVERSACIÓN COTIDIANA
+// ─────────────────────────────────────────────────────────────────────────
+
+export const SMALL_TALK = [
+  {
+    keywords: ["hola", "holi", "holaa", "holaaa", "buenas"],
+    answer:
+      "¡Hola! Bienvenido a InkHaus. Estoy aquí para ayudarte con tus dudas sobre tatuajes, artistas y citas. ¿Qué te gustaría saber?",
+  },
+  {
+    keywords: [
+      "como estas",
+      "como te va",
+      "que tal",
+      "como ha estado tu dia",
+    ],
+    answer:
+      "¡Muy bien, gracias por preguntar! ¿Y tú? Cuéntame, ¿en qué te puedo ayudar con tu tatuaje?",
+  },
+  {
+    keywords: ["buenos dias"],
+    answer:
+      "¡Buenos días! Bienvenido a InkHaus. ¿En qué te puedo ayudar?",
+  },
+  {
+    keywords: ["buenas tardes"],
+    answer:
+      "¡Buenas tardes! Bienvenido a InkHaus. ¿Qué te gustaría consultar?",
+  },
+  {
+    keywords: ["buenas noches"],
+    answer:
+      "¡Buenas noches! Estoy aquí para ayudarte con tus consultas sobre InkHaus.",
+  },
+  {
+    keywords: ["gracias", "muchas gracias", "te agradezco"],
+    answer:
+      "¡De nada! Si tienes otra duda sobre tu tatuaje o quieres cotizar, aquí estoy para ayudarte.",
+  },
+  {
+    keywords: ["adios", "chao", "hasta luego", "nos vemos"],
+    answer:
+      "¡Hasta pronto! Gracias por contactar a InkHaus. ¡Que tengas un excelente día!",
+  },
+];
+
+/**
+ * Busca respuestas de conversación cotidiana.
+ */
+export function findSmallTalkAnswer(text) {
+  const normalizedText = normalizeFaqText(text);
+
+  if (!normalizedText) return null;
+
+  for (const item of SMALL_TALK) {
+    const matches = item.keywords.some((keyword) =>
+      matchesFaqKeyword(normalizedText, keyword)
+    );
+
+    if (matches) return item.answer;
+  }
+
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// DETECCIÓN DE INTENCIÓN DE COTIZACIÓN
 // ─────────────────────────────────────────────────────────────────────────
 export const QUOTE_KEYWORDS = [
-  "cotiz", "precio", "precios", "costo", "cuesta", "cuestan",
-  "cuanto vale", "cuánto vale", "cuanto sale", "cuánto sale",
-  "cuanto cuesta", "cuánto cuesta", "vale un tatuaje", "valor",
-  "presupuesto", "tarifa", "cuanto es", "cuánto es",
+  "cotiz",
+  "precio",
+  "precios",
+  "costo",
+  "cuesta",
+  "cuestan",
+  "cuanto vale",
+  "cuanto sale",
+  "cuanto cuesta",
+  "vale un tatuaje",
+  "valor",
+  "presupuesto",
+  "tarifa",
+  "cuanto es",
 ];
 
 export function isQuoteIntent(text) {
-  const t = (text || "").toLowerCase();
-  return QUOTE_KEYWORDS.some((k) => t.includes(k));
+  const t = normalizeFaqText(text);
+
+  return QUOTE_KEYWORDS.some((keyword) => t.includes(keyword));
 }

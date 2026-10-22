@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { getArtistsAPI } from "../../api/artists.api";
 import { getPortfolioAPI } from "../../api/portfolio.api";
 import { getStylesAPI } from "../../api/styles.api";
+import BookingCTALink from "../../components/ui/BookingCTALink";
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -57,8 +58,8 @@ export default function HomePage() {
         <div className="absolute inset-0 z-0 bg-gradient-to-br from-ink via-ink2 to-black" />
         <div className="absolute inset-0 z-0 opacity-5"
           style={{ backgroundImage: "linear-gradient(#f2ede8 1px,transparent 1px),linear-gradient(90deg,#f2ede8 1px,transparent 1px)", backgroundSize: "80px 80px" }} />
-        <div className="absolute right-[-2rem] top-1/2 -translate-y-1/2 font-display text-[22vw] text-paper/3 select-none pointer-events-none z-0 leading-none">
-          INK
+        <div className="absolute right-[+0.8rem] top-1/2 -translate-y-1/2 font-display text-[22vw] text-paper/3 select-none pointer-events-none z-0 leading-none">
+          INKHAUS
         </div>
         <div className="relative z-10 max-w-3xl">
           <div className="text-xs tracking-[0.3em] uppercase text-muted mb-6">Santiago · Chile · Est. 2018</div>
@@ -70,9 +71,9 @@ export default function HomePage() {
             Tatuajes de autor diseñados para durar toda la vida. Cada pieza es única, creada en colaboración contigo.
           </p>
           <div className="flex gap-4">
-            <Link to="/register" className="px-8 py-4 text-sm font-medium tracking-widest text-white uppercase transition-colors bg-red hover:bg-red-hover">
+            <BookingCTALink className="px-8 py-4 text-sm font-medium tracking-widest text-white uppercase transition-colors bg-red hover:bg-red-hover">
               Reservar cita
-            </Link>
+            </BookingCTALink>
             <a href="#portfolio" className="px-8 py-4 text-sm font-light tracking-widest uppercase transition-colors border border-paper/20 hover:border-paper/50 text-paper">
               Ver portafolio
             </a>
@@ -178,9 +179,9 @@ export default function HomePage() {
         <div className="font-display text-[clamp(2rem,4vw,3.5rem)] tracking-wide text-white leading-tight">
           ¿LISTO PARA TU <em className="italic" style={{ fontFamily: "'Playfair Display',serif" }}>próxima</em> PIEZA?
         </div>
-        <Link to="/register" className="px-10 py-4 text-sm font-medium tracking-widest uppercase transition-colors bg-white text-red hover:bg-paper whitespace-nowrap">
-          Agendar ahora →
-        </Link>
+        <BookingCTALink className="px-8 py-4 text-sm font-medium tracking-widest text-white uppercase transition-colors bg-red hover:bg-red-hover">
+          Reservar cita
+        </BookingCTALink>
       </div>
     </main>
   );

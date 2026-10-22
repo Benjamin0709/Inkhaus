@@ -4,6 +4,8 @@ import BodyViewer3D from "./BodyViewer3D";
 import ChatWindow from "./ChatWindow";
 import { useChatEngine } from "./useChatEngine";
 import { TOTAL_STEPS } from "./chatbotEngine";
+import { useNavigate } from "react-router-dom";
+import { useLiveChat } from "../../context/LiveChatContext";
 
 // Rutas donde el widget NO debe mostrarse
 const HIDDEN_ON = ["/login", "/register"];
@@ -29,9 +31,22 @@ function CloseIcon({ className }) {
 
 export default function ChatbotWidget() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [mobileTab, setMobileTab] = useState("chat"); // 'chat' | '3d'
-  const engine = useChatEngine({ onExit: () => setOpen(false) });
+  const [mobileTab, setMobileTab] = useState("chat");
+  const { openLiveChat } = useLiveChat();
+  
+  const engine = useChatEngine({
+    onExit: () => setOpen(false),
+    onNavigate: (path) => {
+      navigate(path);
+      setOpen(false);
+    },
+    onOpenLiveChat: () => { 
+      setOpen(false); 
+      openLiveChat(); 
+    },
+  });
 
   const hidden = HIDDEN_ON.includes(location.pathname);
 

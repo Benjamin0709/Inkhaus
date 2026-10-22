@@ -3,19 +3,43 @@ import { useParams, Link } from "react-router-dom";
 import { getArtistAPI } from "../../api/artists.api";
 import { getPortfolioAPI } from "../../api/portfolio.api";
 import ImageCarousel from "../../components/ui/ImageCarousel";
+import { useLiveChat } from "../../context/LiveChatContext";
+import { createConversationAPI } from "../../api/conversation.api";
+import { useAuth } from "../../context/AuthContext";
+import { getArtistPricingAPI } from "../../api/pricing.api";
+import {
+  PRICE_ZONES, PRICE_SIZES, SPECIAL_SIZES,
+  pricingDocsToArray, formatCLP,
+} from "../../constants/pricing";
 
 export default function ArtistProfilePage() {
   const { id } = useParams();
   const [artist, setArtist] = useState(null);
   const [works, setWorks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [precios, setPrecios] = useState([]);
+  const { user } = useAuth();
+  const { openLiveChat } = useLiveChat();
+
+  const handleMessage = async () => {
+    if (!user) return (window.location.href = "/login");
+    try {
+      const { data } = await createConversationAPI({ artistaId: artist._id });
+      openLiveChat(data.info._id);
+    } catch (_e) {}
+  };
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([getArtistAPI(id), getPortfolioAPI({ artist: id })])
-      .then(([artistRes, portfolioRes]) => {
+    Promise.all([
+      getArtistAPI(id),
+      getPortfolioAPI({ artist: id }),
+      getArtistPricingAPI(id),
+    ])
+      .then(([artistRes, portfolioRes, pricingRes]) => {
         setArtist(artistRes.data.info);
         setWorks(portfolioRes.data.info || []);
+        setPrecios(pricingDocsToArray(pricingRes.data.info || []));
       })
       .catch(() => setArtist(null))
       .finally(() => setLoading(false));
@@ -65,11 +89,15 @@ export default function ArtistProfilePage() {
           </div>
         </div>
 
-        <Link to={`/artistas/${artist._id}/reservar`}
-          className="flex-shrink-0 px-8 py-4 text-xs font-medium tracking-widest text-center text-white uppercase transition-colors bg-red hover:bg-red-hover">
-          Reservar cita
+        <Link to={`/artists/${artist._id}/agendar`}
+          className="inline-block px-6 py-3 mt-4 text-xs tracking-widest text-white uppercase bg-red hover:bg-red-hover">
+          Agendar cita
         </Link>
       </div>
+      <button onClick={handleMessage}
+        className="inline-block px-6 py-3 mt-4 ml-2 text-xs tracking-widest uppercase transition-colors border border-white/15 text-paper hover:border-white/30">
+        Enviar mensaje
+      </button>
 
       <h2 className="mb-6 text-2xl tracking-wide font-display">TRABAJOS</h2>
       {works.length === 0 ? (
@@ -91,6 +119,71 @@ export default function ArtistProfilePage() {
           ))}
         </div>
       )}
+      
+      {/* Precios aproximados */}
+      {precios.length > 0 && (
+        <div className="mb-14">
+          <h2 className="mb-6 text-2xl tracking-wide font-display">PRECIOS APROXIMADOS</h2>
+
+          <div className="overflow-x-auto border border-white/10">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-white/5">
+                  <th className="sticky left-0 p-3 text-left border-r bg-ink2 border-white/10 text-muted min-w-[140px]">
+                    Zona
+                  </th>
+                  {PRICE_SIZES.map((s) => (
+                    <th key={s.value} className="p-3 text-center border-r border-white/10 text-muted min-w-[130px]">
+                      {s.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {PRICE_ZONES.map((zona) => {
+                  const fila = PRICE_SIZES.map((s) =>
+                    precios.find((p) => p.zona === zona && p.tamanio === s.value)
+                  );
+                  if (fila.every((p) => !p)) return null;
+                  return (
+                    <tr key={zona} className="border-t border-white/10">
+                      <td className="sticky left-0 p-3 font-medium border-r bg-ink2 border-white/10 text-paper">
+                        {zona}
+                      </td>
+                      {fila.map((p, i) => (
+                        <td key={i} className="p-3 text-center border-r border-white/10 text-paper">
+                          {p
+                            ? `${formatCLP(p.precio_min)} – ${formatCLP(p.precio_max)}`
+                            : <span className="text-white/20">—</span>}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {SPECIAL_SIZES.map((s) => {
+            const p = precios.find((pr) => pr.zona === s.zonaLabel && pr.tamanio === s.value);
+            if (!p) return null;
+            return (
+              <div key={s.value} className="flex items-center justify-between px-4 py-3 mt-2 border border-white/10">
+                <span className="text-xs text-paper">{s.label}</span>
+                <span className="text-xs text-paper">
+                  {formatCLP(p.precio_min)} – {formatCLP(p.precio_max)}
+                </span>
+              </div>
+            );
+          })}
+
+          <p className="mt-3 text-[10px] text-muted">
+            Los precios son aproximados y pueden variar según el diseño y detalles del tatuaje.
+          </p>
+        </div>
+      )}
     </div>
+    
+    
   );
 }

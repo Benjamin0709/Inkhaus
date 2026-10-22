@@ -9,6 +9,13 @@ import pricingRoutes from "./routes/pricing.routes.js";
 import appointmentRoutes from "./routes/appointment.routes.js";
 import styleRoutes from "./routes/style.routes.js";                        
 import uploadRoutes from "./routes/upload.routes.js"; 
+import chatbotQueryRoutes from "./routes/chatbotQuery.routes.js";
+import passwordRoutes from "./routes/password.routes.js";
+import contactRoutes from "./routes/contact.routes.js";
+import conversationRoutes from "./routes/conversation.routes.js";
+import siteContentRoutes from "./routes/siteContent.routes.js";
+import paymentRoutes from "./routes/payment.routes.js";
+import { startReminderCron } from "./services/reminderCron.js";
 import path from "path";                          
 dotenv.config();
 
@@ -31,6 +38,12 @@ app.use("/api", pricingRoutes);
 app.use("/api", appointmentRoutes);
 app.use("/api", styleRoutes);
 app.use("/api", uploadRoutes);
+app.use("/api", chatbotQueryRoutes);
+app.use("/api", passwordRoutes);
+app.use("/api", contactRoutes);
+app.use("/api", conversationRoutes);
+app.use("/api", siteContentRoutes);
+app.use("/api", paymentRoutes);
 
 //imágenes subidas
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
@@ -50,4 +63,5 @@ app.use((err, req, res, next) => {
 // ─── Iniciar ───────────────────────────────────────────────
 connectDB().then(() => {
   app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
+  startReminderCron();
 });

@@ -7,3 +7,6 @@ export const uploadImageAPI = (file) => {
     headers: { "Content-Type": "multipart/form-data" },
   });
 };
+export const uploadVideoAPI = (formData) => {
+  return api.post("/videos/upload", formData);
+};

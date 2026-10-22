@@ -1,8 +1,15 @@
+
 import { useCallback, useRef, useState } from "react";
 import { getQuoteAPI } from "../../api/pricing.api";
 import { getArtistsAPI } from "../../api/artists.api";
 import { useAuth } from "../../context/AuthContext";
 import { getPortfolioAPI } from "../../api/portfolio.api";
+import { logUnansweredQueryAPI } from "../../api/chatbotQuery.api";
+import {
+  createConversationAPI,
+  sendConversationMessageAPI,
+} from "../../api/conversation.api";
+
 import {
   QUICK_ZONES,
   getSizeOptionsForZone,
@@ -15,101 +22,298 @@ import {
   CAMBIAR_ZONA,
   STEPS,
   findFaqAnswer,
+  findSmallTalkAnswer,
+  findArtistQuery,
+  findStyleQuery,
+  findDesignQuery,
+  findMentionedStyle,
   isQuoteIntent,
 } from "./chatbotEngine";
 
 let uid = 0;
-const nextId = () => `m${++uid}`;
-
-// Índice de cada paso lógico dentro de STEPS, para la barra de progreso
-const STEP_INDEX = STEPS.reduce((acc, s, i) => ({ ...acc, [s]: i }), {});
-STEP_INDEX.freeform = STEP_INDEX.cotizacion;
-STEP_INDEX.portafolio = STEP_INDEX.artista;
+const nextId = () => `m${Date.now()}-${++uid}`;
+const API_TIMEOUT = 10000;
 
 const SIN_ASIGNAR = "Continuar sin elegir (según disponibilidad)";
+const VER_PORTAFOLIO = "Ver portafolio";
+const CONTINUAR_COTIZACION = "Continuar con la cotización";
+const CONSULTAR_ARTISTAS = "Consultar artistas";
 
-/**
- * Máquina de estados del chatbot de cotización guiado por planimetría.
- * Desacoplada del visor 3D: éste solo llama a `selectZonaFrom3D`.
- *
- * @param {Object} [options]
- * @param {() => void} [options.onExit] - se llama cuando el usuario elige
- *   "Salir": el widget lo usa para cerrar el panel flotante.
- */
-export function useChatEngine({ onExit } = {}) {
+// ── Funciones auxiliares ──────────────────────────────────────────────
+
+const normalizeForMatch = (value) =>
+  (value || "")
+    .toString()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+const getArtistsWithTimeout = async () => {
+  let timeoutId;
+
+  try {
+    const request = getArtistsAPI();
+
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(
+          new Error("La API de artistas tardó demasiado en responder.")
+        );
+      }, API_TIMEOUT);
+    });
+
+    const response = await Promise.race([request, timeout]);
+    const data = response?.data;
+
+    const artists = Array.isArray(data)
+      ? data
+      : data?.info || data?.artists || [];
+
+    if (!Array.isArray(artists)) {
+      throw new Error("La API no devolvió una lista válida de artistas.");
+    }
+
+    return artists;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
+const getAvailableStyles = (artists) => [
+  ...new Set(
+    artists
+      .flatMap((artist) =>
+        Array.isArray(artist.especialidades)
+          ? artist.especialidades
+          : []
+      )
+      .filter(
+        (style) =>
+          typeof style === "string" && style.trim().length > 0
+      )
+      .map((style) => style.trim())
+  ),
+];
+
+const getPortfolioWithTimeout = async (params) => {
+  let timeoutId;
+
+  try {
+    const request = getPortfolioAPI(params);
+
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(
+          new Error("La API del portafolio tardó demasiado en responder.")
+        );
+      }, API_TIMEOUT);
+    });
+
+    const response = await Promise.race([request, timeout]);
+
+    return response?.data;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
+const getPortfolioItems = (data) => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.info)) return data.info;
+  if (Array.isArray(data?.portfolio)) return data.portfolio;
+  if (Array.isArray(data?.items)) return data.items;
+
+  return [];
+};
+
+const matchesStyle = (item, estilo) => {
+  const target = normalizeForMatch(estilo);
+
+  const styles = Array.isArray(item?.styles)
+    ? item.styles
+    : [];
+
+  return styles.some((style) => {
+    const styleName =
+      typeof style === "string" ? style : style?.nombre;
+
+    return normalizeForMatch(styleName) === target;
+  });
+};
+
+const getGalleryImages = (items) =>
+  items
+    .filter((item) => {
+      const images = Array.isArray(item?.imagenes_urls)
+        ? item.imagenes_urls
+        : [];
+
+      return images.some(
+        (url) => typeof url === "string" && url.trim().length > 0
+      );
+    })
+    .map((item) => {
+      const images = Array.isArray(item?.imagenes_urls)
+        ? item.imagenes_urls
+        : [];
+
+      return {
+        imagen_url: images.find(
+          (url) => typeof url === "string" && url.trim().length > 0
+        ),
+        titulo: item?.titulo || "Diseño de portafolio",
+      };
+    })
+    .slice(0, 4);
+
+// Índice de cada paso lógico dentro de STEPS.
+const STEP_INDEX = STEPS.reduce(
+  (acc, step, index) => ({ ...acc, [step]: index }),
+  {}
+);
+
+STEP_INDEX.freeform = STEP_INDEX.cotizacion;
+STEP_INDEX.portafolio = STEP_INDEX.artista;
+STEP_INDEX.referencias_estilo = STEP_INDEX.estilo;
+
+// ── Motor principal del chatbot ───────────────────────────────────────
+
+export function useChatEngine({
+  onExit,
+  onNavigate,
+  onOpenLiveChat,
+} = {}) {
   const { user } = useAuth();
+
   const [messages, setMessages] = useState([]);
   const [inputEnabled, setInputEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [progressIndex, setProgressIndex] = useState(0);
+
   const stepRef = useRef("idle");
+  const startedRef = useRef(false);
+
+  // Indica si el usuario llegó a los estilos desde una consulta libre
+  // o desde el proceso guiado de cotización.
+  const styleBrowseModeRef = useRef(false);
+
   const selectionRef = useRef({
     zona: null,
     tamanio: null,
     tamanioLabel: null,
     estilo: null,
-    artista: null, // { id, nombre } | null (null = "por asignar")
+    artista: null,
   });
-  const artistCandidatesRef = useRef([]);
-  const [progressIndex, setProgressIndex] = useState(0);
-  const startedRef = useRef(false);
 
-  const setStep = (s) => {
-    stepRef.current = s;
-    setProgressIndex(STEP_INDEX[s] ?? 0);
-  };
+  const artistCandidatesRef = useRef([]);
+  const pendingLiveMessageRef = useRef("");
+
+  const setStep = useCallback((step) => {
+    stepRef.current = step;
+    setProgressIndex(STEP_INDEX[step] ?? 0);
+  }, []);
 
   const pushBot = useCallback((text, extra = {}) => {
-    setMessages((prev) => [...prev, { id: nextId(), from: "bot", text, ...extra }]);
+    setMessages((previous) => [
+      ...previous,
+      {
+        id: nextId(),
+        from: "bot",
+        text,
+        ...extra,
+      },
+    ]);
   }, []);
 
   const pushUser = useCallback((text) => {
-    setMessages((prev) => [...prev, { id: nextId(), from: "user", text }]);
+    setMessages((previous) => [
+      ...previous,
+      {
+        id: nextId(),
+        from: "user",
+        text,
+      },
+    ]);
   }, []);
 
   const attachOptions = useCallback((choices) => {
-    setMessages((prev) => {
-      if (prev.length === 0) return prev;
-      const copy = [...prev];
-      copy[copy.length - 1] = { ...copy[copy.length - 1], options: choices, answered: null };
+    setMessages((previous) => {
+      if (previous.length === 0) return previous;
+
+      const copy = [...previous];
+      const lastIndex = copy.length - 1;
+
+      copy[lastIndex] = {
+        ...copy[lastIndex],
+        options: choices,
+        answered: null,
+      };
+
       return copy;
     });
   }, []);
 
-  const markAnswered = useCallback((msgId, choice) => {
-    setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, answered: choice } : m)));
+  const markAnswered = useCallback((messageId, choice) => {
+    setMessages((previous) =>
+      previous.map((message) =>
+        message.id === messageId
+          ? { ...message, answered: choice }
+          : message
+      )
+    );
   }, []);
 
-  const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+  const delay = (ms) =>
+    new Promise((resolve) => setTimeout(resolve, ms));
 
-  // ── Paso 5: cotización real (con fallback local de precio) ──────────
+  // ── Cotización ──────────────────────────────────────────────────────
+
   const runQuote = useCallback(async () => {
     setStep("cotizacion");
     setBusy(true);
+    setInputEnabled(false);
+
     pushBot("Calculando cotización…");
     await delay(500);
 
     const { zona, tamanio, estilo, artista } = selectionRef.current;
     const zonaParaTarifa = zoneBase(zona);
+
     let precio = null;
     let fuente = "estimado";
 
     try {
-      const { data } = await getQuoteAPI(zonaParaTarifa, tamanio, estilo);
+      const { data } = await getQuoteAPI(
+        zonaParaTarifa,
+        tamanio,
+        estilo
+      );
+
       if (data?.success && data?.info) {
-        precio = { min: data.info.precio_min_clp, max: data.info.precio_max_clp };
+        precio = {
+          min: data.info.precio_min_clp,
+          max: data.info.precio_max_clp,
+        };
+
         fuente = "db";
       }
-    } catch (_e) {
-      // Sin tarifa registrada aún para esta combinación -> se usa fallback
+    } catch (_error) {
+      // Si no existe una tarifa o falla la API, se usa el precio estimado.
     }
+
     if (!precio) {
-      precio = FALLBACK_PRICES[tamanio] || { min: 80000, max: 200000 };
+      precio = FALLBACK_PRICES[tamanio] || {
+        min: 80000,
+        max: 200000,
+      };
     }
 
-    const artistaLabel = artista?.nombre || "Por asignar según disponibilidad";
+    const artistaLabel =
+      artista?.nombre || "Por asignar según disponibilidad";
 
-    setMessages((prev) => [
-      ...prev,
+    setMessages((previous) => [
+      ...previous,
       {
         id: nextId(),
         from: "bot",
@@ -128,190 +332,416 @@ export function useChatEngine({ onExit } = {}) {
     try {
       localStorage.setItem(
         "inkhaus_pending_quote",
-        JSON.stringify({ ...selectionRef.current, precio, fecha: Date.now() })
+        JSON.stringify({
+          ...selectionRef.current,
+          precio,
+          fecha: Date.now(),
+        })
       );
-    } catch (_e) {}
+    } catch (_error) {
+      // El almacenamiento local puede no estar disponible.
+    }
 
     setBusy(false);
     await delay(500);
+
     pushBot(
       artista
         ? `¿Quieres agendar con ${artistaLabel}? La reserva confirma tu hora.`
         : "¿Quieres avanzar con la reserva? Un artista disponible confirmará tu hora."
     );
-    attachOptions(["Agendar y pagar reserva", "Más información", "Volver a empezar"]);
-  }, [attachOptions, pushBot]);
 
-  const normalizeForMatch = (s) => (s || "").trim().toLowerCase();
+    attachOptions([
+      "Agendar y pagar reserva",
+      "Más información",
+      "Volver a empezar",
+    ]);
 
-  const VER_PORTAFOLIO = "Ver portafolio";
-  const CONTINUAR_COTIZACION = "Continuar con la cotización";
+    setInputEnabled(true);
+  }, [attachOptions, pushBot, setStep]);
 
-  // ── Tras elegir un artista concreto, ofrece un botón para ver SU
-  // portafolio (trabajos que coincidan con el estilo elegido) antes de
-  // seguir a la cotización final. El usuario decide si quiere verlo. ──
+  // ── Portafolio de un artista concreto ───────────────────────────────
+
   const offerPortfolio = useCallback(
     (artistName) => {
       setStep("portafolio");
-      pushBot(`Elegiste a ${artistName}. ¿Quieres ver su portafolio antes de continuar?`);
-      attachOptions([VER_PORTAFOLIO, CONTINUAR_COTIZACION]);
+
+      pushBot(
+        `Elegiste a ${artistName}. ¿Quieres ver su portafolio antes de continuar?`
+      );
+
+      attachOptions([
+        VER_PORTAFOLIO,
+        CONTINUAR_COTIZACION,
+      ]);
     },
-    [attachOptions, pushBot]
+    [attachOptions, pushBot, setStep]
   );
 
-  // ── Al presionar "Ver portafolio", busca en el portafolio del artista
-  // trabajos que coincidan con el estilo elegido y los muestra como
-  // galería. Si no hay coincidencias, avisa y sigue igual. Al terminar,
-  // deja el botón para continuar con la cotización. ──
   const showArtistReferences = useCallback(
     async (artistId, estilo) => {
       setBusy(true);
-      try {
-        const { data } = await getPortfolioAPI({ artist: artistId });
-        const items = data?.info || [];
-        const target = normalizeForMatch(estilo);
-        const matches = items
-          .filter((it) => (it.styles || []).some((s) => normalizeForMatch(s.nombre) === target))
-          .slice(0, 4);
+      setInputEnabled(false);
 
-        if (matches.length > 0) {
-          pushBot(`Estos son algunos trabajos de ${selectionRef.current.artista?.nombre} en ${estilo}:`);
-          setMessages((prev) => [
-            ...prev,
+      try {
+        if (!artistId) {
+          throw new Error("No se encontró el identificador del artista.");
+        }
+
+        const data = await getPortfolioWithTimeout({
+          artist: artistId,
+        });
+
+        const items = getPortfolioItems(data);
+
+        const matches = items
+          .filter((item) => matchesStyle(item, estilo));
+
+        const gallery = getGalleryImages(matches);
+
+        if (gallery.length > 0) {
+          pushBot(
+            `Estos son algunos trabajos de ${selectionRef.current.artista?.nombre} en ${estilo}:`
+          );
+
+          setMessages((previous) => [
+            ...previous,
             {
               id: nextId(),
               from: "bot",
-              gallery: matches.map((m) => ({
-                imagen_url: m.imagenes_urls?.[0],
-                titulo: m.titulo,
-              })),
+              gallery,
             },
           ]);
         } else {
-          pushBot(`${selectionRef.current.artista?.nombre} todavía no tiene trabajos cargados en ese estilo.`);
+          pushBot(
+            `${selectionRef.current.artista?.nombre} todavía no tiene trabajos con imágenes cargadas en ese estilo.`
+          );
         }
-        await delay(500);
-      } catch (_e) {
-        pushBot("No pudimos cargar el portafolio en este momento.");
+      } catch (error) {
+        console.error("Error al cargar el portafolio del artista:", error);
+
+        pushBot(
+          "No pudimos cargar el portafolio en este momento. Puedes continuar con la cotización."
+        );
       } finally {
         setBusy(false);
+        setInputEnabled(true);
         attachOptions([CONTINUAR_COTIZACION]);
       }
     },
     [attachOptions, pushBot]
   );
 
-  // ── Paso 4: elegir artista real según el estilo (sin auto-asignar) ──
+  // ── Galería general de un estilo ────────────────────────────────────
+  // Se llama al seleccionar Blackwork, Anime, Realismo, etc.
+  // Busca diseños del estilo elegido y muestra hasta cuatro miniaturas.
+
+  const showStyleReferences = useCallback(
+    async (estilo) => {
+      setStep("referencias_estilo");
+      setBusy(true);
+      setInputEnabled(false);
+
+      try {
+        const data = await getPortfolioWithTimeout();
+        const items = getPortfolioItems(data);
+
+        const matchingItems = items.filter((item) =>
+          matchesStyle(item, estilo)
+        );
+
+        const gallery = getGalleryImages(matchingItems);
+
+        if (gallery.length > 0) {
+          pushBot(
+            `Mira estos diseños de referencia en estilo ${estilo}:`
+          );
+
+          setMessages((previous) => [
+            ...previous,
+            {
+              id: nextId(),
+              from: "bot",
+              gallery,
+            },
+          ]);
+        } else {
+          pushBot(
+            `No encontré imágenes de referencia cargadas para ${estilo} en este momento. Puedes consultar los artistas o continuar con la cotización.`
+          );
+        }
+      } catch (error) {
+        console.error(
+          `Error al cargar diseños del estilo ${estilo}:`,
+          error
+        );
+
+        pushBot(
+          "No pude cargar las imágenes del portafolio en este momento. Puedes continuar con la cotización."
+        );
+      } finally {
+        setBusy(false);
+        setInputEnabled(true);
+
+        attachOptions([
+          CONSULTAR_ARTISTAS,
+          CONTINUAR_COTIZACION,
+        ]);
+      }
+    },
+    [attachOptions, pushBot, setStep]
+  );
+
+  // ── Consultar artistas de un estilo ─────────────────────────────────
+
+  const showArtistsForStyle = useCallback(
+    async (estilo) => {
+      setBusy(true);
+      setInputEnabled(false);
+
+      try {
+        const artists = await getArtistsWithTimeout();
+        const matches = matchArtistsByStyle(artists, estilo);
+
+        if (matches.length > 0) {
+          const names = matches
+            .map((artist) => artist.nombre_artistico)
+            .filter(Boolean);
+
+          pushBot(
+            `Estos son los artistas de InkHaus que trabajan con ${estilo}:\n${names
+              .map((name) => `• ${name}`)
+              .join("\n")}`
+          );
+        } else {
+          pushBot(
+            `No encontré artistas registrados con la especialidad ${estilo}.`
+          );
+        }
+      } catch (error) {
+        console.error("Error al consultar artistas:", error);
+
+        pushBot(
+          "No pude consultar los artistas en este momento. Intenta nuevamente más tarde."
+        );
+      } finally {
+        setStep("freeform");
+        setBusy(false);
+        setInputEnabled(true);
+
+        attachOptions([
+          CONTINUAR_COTIZACION,
+          "Volver a empezar",
+        ]);
+      }
+    },
+    [attachOptions, pushBot, setStep]
+  );
+
+  // ── Paso 4: selección de artista en la cotización guiada ────────────
+
   const stepArtista = useCallback(async () => {
     setStep("artista");
     setBusy(true);
-    pushBot(`Buscando artistas especializados en ${selectionRef.current.estilo}…`);
+    setInputEnabled(false);
+
+    pushBot(
+      `Buscando artistas especializados en ${selectionRef.current.estilo}…`
+    );
+
     await delay(400);
 
     let candidatos = [];
+
     try {
-      const { data } = await getArtistsAPI();
-      const lista = data?.info || data?.artists || [];
-      candidatos = matchArtistsByStyle(lista, selectionRef.current.estilo);
-    } catch (_e) {
-      // Sin conexión a la API -> se sigue sin artistas reales
+      const artists = await getArtistsWithTimeout();
+
+      candidatos = matchArtistsByStyle(
+        artists,
+        selectionRef.current.estilo
+      );
+    } catch (error) {
+      console.error("Error al buscar artistas:", error);
     }
+
     artistCandidatesRef.current = candidatos;
+
     setBusy(false);
+    setInputEnabled(true);
 
     if (candidatos.length > 0) {
       pushBot("Elige con quién te gustaría trabajar:");
-      attachOptions([...candidatos.map((a) => a.nombre_artistico), SIN_ASIGNAR]);
+
+      attachOptions([
+        ...candidatos.map((artist) => artist.nombre_artistico),
+        SIN_ASIGNAR,
+      ]);
     } else {
       pushBot(
-        "Por ahora no hay artistas cargados para ese estilo en el sistema — vas a poder elegir uno al confirmar tu cita."
+        "Por ahora no hay artistas cargados para ese estilo en el sistema. Podrás consultar la disponibilidad al confirmar tu cita."
       );
+
       selectionRef.current.artista = null;
       setTimeout(runQuote, 400);
     }
-  }, [attachOptions, pushBot, runQuote]);
+  }, [attachOptions, pushBot, runQuote, setStep]);
 
-  // ── Paso 3: estilo ───────────────────────────────────────────────────
-  const stepEstilo = useCallback(() => {
+  // ── Paso 3: selección de estilo durante la cotización ───────────────
+
+  const stepEstilo = useCallback(async () => {
     setStep("estilo");
-    pushBot(`Tamaño: ${selectionRef.current.tamanioLabel} ✓  ¿Qué estilo te interesa?`);
-    attachOptions(STYLE_OPTIONS);
-  }, [attachOptions, pushBot]);
+    styleBrowseModeRef.current = false;
 
-  // ── Paso 2: tamaño (depende de la zona; incluye "elegir otra zona") ─
+    setBusy(true);
+    setInputEnabled(false);
+
+    try {
+      const artists = await getArtistsWithTimeout();
+      const availableStyles = getAvailableStyles(artists);
+
+      pushBot(
+        `Tamaño: ${selectionRef.current.tamanioLabel} ✓ ¿Qué estilo te interesa?`
+      );
+
+      attachOptions(
+        availableStyles.length > 0
+          ? availableStyles
+          : STYLE_OPTIONS
+      );
+    } catch (error) {
+      console.error("Error al cargar estilos:", error);
+
+      pushBot(
+        `Tamaño: ${selectionRef.current.tamanioLabel} ✓ ¿Qué estilo te interesa?`
+      );
+
+      attachOptions(STYLE_OPTIONS);
+    } finally {
+      setBusy(false);
+      setInputEnabled(true);
+    }
+  }, [attachOptions, pushBot, setStep]);
+
+  // ── Paso 2: tamaño ──────────────────────────────────────────────────
+
   const stepTamanio = useCallback(() => {
     setStep("tamanio");
+
     const tip = getZoneTip(selectionRef.current.zona);
-    pushBot(`Zona: ${selectionRef.current.zona} ✓${tip ? "  " + tip : ""}`);
+
+    pushBot(
+      `Zona: ${selectionRef.current.zona} ✓${tip ? "  " + tip : ""}`
+    );
+
     setTimeout(() => {
       pushBot("¿Qué tamaño buscas?");
+
       attachOptions([
-        ...getSizeOptionsForZone(selectionRef.current.zona).map((s) => s.label),
+        ...getSizeOptionsForZone(selectionRef.current.zona).map(
+          (size) => size.label
+        ),
         CAMBIAR_ZONA,
       ]);
-    }, 400);
-  }, [attachOptions, pushBot]);
 
-  // ── Paso 1: zona ──────────────────────────────────────────────────────
+      setInputEnabled(true);
+    }, 400);
+  }, [attachOptions, pushBot, setStep]);
+
+  // ── Paso 1: zona ────────────────────────────────────────────────────
+
   const stepZona = useCallback(() => {
     setStep("zona");
-    pushBot("Toca la zona en el modelo 3D ← o elige aquí:");
+    setInputEnabled(true);
+
+    pushBot("Toca la zona en el modelo 3D o elige aquí:");
+
     attachOptions(QUICK_ZONES);
-  }, [attachOptions, pushBot]);
+  }, [attachOptions, pushBot, setStep]);
+
+  // ── Bienvenida ──────────────────────────────────────────────────────
 
   const stepWelcome = useCallback(() => {
     setStep("welcome");
+    setInputEnabled(true);
+
     pushBot(
-      "¡Hola! Rotá el modelo 3D y hacé clic en la zona donde querés el tatuaje. El sistema detecta automáticamente si es frente o espalda."
+      "¡Hola! Gira el modelo 3D y haz clic en la zona donde quieres el tatuaje. También puedes elegir una zona de la lista."
     );
+
     setTimeout(() => {
       pushBot("¿Empezamos?");
       attachOptions(["Sí, vamos", "Tengo una consulta"]);
     }, 450);
-  }, [attachOptions, pushBot]);
+  }, [attachOptions, pushBot, setStep]);
 
   const start = useCallback(() => {
     if (startedRef.current) return;
+
     startedRef.current = true;
     stepWelcome();
   }, [stepWelcome]);
 
   const restart = useCallback(() => {
-    selectionRef.current = { zona: null, tamanio: null, tamanioLabel: null, estilo: null, artista: null };
-    artistCandidatesRef.current = [];
-    setMessages([]);
-    setInputEnabled(false);
-    stepWelcome();
-  }, [stepWelcome]);
+    selectionRef.current = {
+      zona: null,
+      tamanio: null,
+      tamanioLabel: null,
+      estilo: null,
+      artista: null,
+    };
 
-  // ── Cierra la conversación por completo: limpia todo y deja el motor
-  // listo para que la próxima vez que se abra el widget arranque desde
-  // el paso 0 (welcome) en vez de quedar "congelado" a mitad de flujo. ──
-  const exitChat = useCallback(() => {
-    selectionRef.current = { zona: null, tamanio: null, tamanioLabel: null, estilo: null, artista: null };
     artistCandidatesRef.current = [];
+    styleBrowseModeRef.current = false;
+
     setMessages([]);
     setInputEnabled(false);
     setBusy(false);
+
+    stepWelcome();
+  }, [stepWelcome]);
+
+  const exitChat = useCallback(() => {
+    selectionRef.current = {
+      zona: null,
+      tamanio: null,
+      tamanioLabel: null,
+      estilo: null,
+      artista: null,
+    };
+
+    artistCandidatesRef.current = [];
+    styleBrowseModeRef.current = false;
+
+    setMessages([]);
+    setInputEnabled(false);
+    setBusy(false);
+
     stepRef.current = "idle";
     setProgressIndex(0);
-    startedRef.current = false; // próximo start() vuelve a disparar stepWelcome
+    startedRef.current = false;
+
     onExit?.();
   }, [onExit]);
 
   const selectZona = useCallback(
     (zona) => {
       if (stepRef.current !== "zona") return;
+
       selectionRef.current.zona = zona;
       pushUser(zona);
+
       setTimeout(stepTamanio, 300);
     },
     [pushUser, stepTamanio]
   );
 
-  const selectZonaFrom3D = useCallback((zona) => selectZona(zona), [selectZona]);
+  const selectZonaFrom3D = useCallback(
+    (zona) => selectZona(zona),
+    [selectZona]
+  );
 
-  // ── Click en una opción de botones ───────────────────────────────────
+  // ── Manejo de botones ──────────────────────────────────────────────
+
   const handleOption = useCallback(
     (msgId, choice) => {
       markAnswered(msgId, choice);
@@ -324,11 +754,13 @@ export function useChatEngine({ onExit } = {}) {
           setTimeout(stepZona, 300);
         } else {
           setStep("freeform");
+
           setTimeout(() => {
             pushBot("Escribe tu consulta:");
             setInputEnabled(true);
           }, 300);
         }
+
         return;
       }
 
@@ -343,48 +775,125 @@ export function useChatEngine({ onExit } = {}) {
           setTimeout(stepZona, 300);
           return;
         }
-        const opt = getSizeOptionsForZone(selectionRef.current.zona).find((s) => s.label === choice);
+
+        const option = getSizeOptionsForZone(
+          selectionRef.current.zona
+        ).find((size) => size.label === choice);
+
         selectionRef.current.tamanioLabel = choice;
-        selectionRef.current.tamanio = SIZE_TO_DB_ENUM[opt?.value] || opt?.value;
+        selectionRef.current.tamanio =
+          SIZE_TO_DB_ENUM[option?.value] || option?.value;
+
         setTimeout(stepEstilo, 300);
         return;
       }
 
       if (step === "estilo") {
+        // Estas opciones también aparecen cuando se consultan estilos
+        // escribiendo en el chat, fuera de la cotización guiada.
+        if (choice === CONSULTAR_ARTISTAS) {
+          if (styleBrowseModeRef.current) {
+            setTimeout(
+              () => showArtistsForStyle(selectionRef.current.estilo),
+              300
+            );
+          } else {
+            setTimeout(stepArtista, 300);
+          }
+
+          return;
+        }
+
+        if (choice === CONTINUAR_COTIZACION) {
+          styleBrowseModeRef.current = true;
+          setStep("freeform");
+          setTimeout(stepZona, 300);
+          return;
+        }
+
         selectionRef.current.estilo = choice;
-        setTimeout(stepArtista, 300);
+
+        setTimeout(() => showStyleReferences(choice), 300);
+        return;
+      }
+
+      if (step === "referencias_estilo") {
+        if (choice === CONSULTAR_ARTISTAS) {
+          if (styleBrowseModeRef.current) {
+            setTimeout(
+              () => showArtistsForStyle(selectionRef.current.estilo),
+              300
+            );
+          } else {
+            setTimeout(stepArtista, 300);
+          }
+
+          return;
+        }
+
+        if (choice === CONTINUAR_COTIZACION) {
+          if (styleBrowseModeRef.current) {
+            setStep("freeform");
+            setTimeout(stepZona, 300);
+          } else {
+            setTimeout(stepArtista, 300);
+          }
+
+          return;
+        }
+
         return;
       }
 
       if (step === "artista") {
         let chosenArtist = null;
+
         if (choice === SIN_ASIGNAR) {
           selectionRef.current.artista = null;
         } else {
-          const found = artistCandidatesRef.current.find((a) => a.nombre_artistico === choice);
+          const found = artistCandidatesRef.current.find(
+            (artist) => artist.nombre_artistico === choice
+          );
+
           chosenArtist = found || null;
+
           selectionRef.current.artista = found
-            ? { id: found._id, nombre: found.nombre_artistico }
-            : { id: null, nombre: choice };
+            ? {
+                id: found._id,
+                nombre: found.nombre_artistico,
+              }
+            : {
+                id: null,
+                nombre: choice,
+              };
         }
 
         if (chosenArtist?._id) {
-          setTimeout(() => offerPortfolio(chosenArtist.nombre_artistico), 300);
+          setTimeout(
+            () => offerPortfolio(chosenArtist.nombre_artistico),
+            300
+          );
         } else {
           setTimeout(runQuote, 300);
         }
+
         return;
       }
 
       if (step === "portafolio") {
         if (choice === VER_PORTAFOLIO) {
           setTimeout(
-            () => showArtistReferences(selectionRef.current.artista?.id, selectionRef.current.estilo),
+            () =>
+              showArtistReferences(
+                selectionRef.current.artista?.id,
+                selectionRef.current.estilo
+              ),
             300
           );
         } else {
           setTimeout(runQuote, 300);
         }
+
         return;
       }
 
@@ -393,70 +902,342 @@ export function useChatEngine({ onExit } = {}) {
           setTimeout(() => {
             if (!user) {
               pushBot(
-                "Necesitás iniciar sesión para agendar y pagar la reserva. Tu cotización quedó guardada — te esperamos en Ingresar / Reservar cita."
+                "Necesitas iniciar sesión para agendar y pagar la reserva. Tu cotización quedó guardada."
               );
+
+              attachOptions(["Ir a iniciar sesión"]);
             } else {
+              const artistId = selectionRef.current.artista?.id;
+
               pushBot(
-                "Te redirigimos al calendario y Webpay Plus. (Módulo de agenda y pagos — próximamente)"
+                artistId
+                  ? "Perfecto, te llevaremos a elegir día y hora con tu artista."
+                  : "Perfecto, elige un artista para ver su disponibilidad."
               );
+
+              attachOptions(["Ir a agendar cita"]);
             }
           }, 300);
         } else if (choice.startsWith("Más información")) {
           setStep("freeform");
+
           setTimeout(() => {
             pushBot("Escribe tu consulta:");
             setInputEnabled(true);
           }, 300);
-        } else {
+        } else if (choice.startsWith("Ir a iniciar sesión")) {
+          setTimeout(() => onNavigate?.("/login"), 200);
+        } else if (choice.startsWith("Ir a agendar cita")) {
+          const artistId = selectionRef.current.artista?.id;
+
+          setTimeout(
+            () =>
+              onNavigate?.(
+                artistId
+                  ? `/artists/${artistId}/agendar`
+                  : "/artists"
+              ),
+            200
+          );
+        } else if (choice.startsWith("Volver a empezar")) {
           setTimeout(restart, 300);
         }
+
         return;
       }
 
-      // ── freeform: acá vive el botón "Salir" que antes no hacía nada ──
       if (step === "freeform") {
         if (choice.startsWith("Continuar")) {
           setTimeout(stepZona, 300);
         } else if (choice.startsWith("Salir")) {
           setTimeout(exitChat, 300);
+        } else if (choice.startsWith("Iniciar sesión")) {
+          setTimeout(() => onNavigate?.("/login"), 200);
+        } else if (choice.startsWith("Abrir chat")) {
+          setInputEnabled(false);
+          setBusy(true);
+
+          setTimeout(async () => {
+            try {
+              const pendingMessage = pendingLiveMessageRef.current;
+
+              if (pendingMessage) {
+                const { data } = await createConversationAPI({
+                  origen: "chatbot_fallback",
+                });
+
+                await sendConversationMessageAPI(
+                  data.info._id,
+                  pendingMessage
+                );
+
+                pendingLiveMessageRef.current = "";
+              }
+
+              onOpenLiveChat?.();
+            } catch (error) {
+              console.error("Error al abrir el chat en vivo:", error);
+
+              pushBot(
+                "No pude conectar con el equipo en este momento. Puedes seguir escribiendo aquí o intentarlo nuevamente."
+              );
+
+              setInputEnabled(true);
+            } finally {
+              setBusy(false);
+            }
+          }, 200);
         }
+
         return;
       }
     },
-    [markAnswered, pushBot, pushUser, restart, runQuote, showArtistReferences, offerPortfolio, stepArtista, stepEstilo, stepTamanio, stepZona, exitChat, user]
+    [
+      attachOptions,
+      exitChat,
+      markAnswered,
+      offerPortfolio,
+      onNavigate,
+      onOpenLiveChat,
+      pushBot,
+      pushUser,
+      restart,
+      runQuote,
+      setStep,
+      showArtistReferences,
+      showArtistsForStyle,
+      showStyleReferences,
+      stepArtista,
+      stepEstilo,
+      stepTamanio,
+      stepZona,
+      user,
+    ]
   );
 
-  // ── Texto libre: primero revisa si es intención de cotización (para
-  // redirigir directo al flujo guiado), luego busca en la FAQ, y si no
-  // encuentra nada ofrece continuar igualmente. ──
+  // ── Consultas escritas en el chat ───────────────────────────────────
+
   const sendText = useCallback(
-    (text) => {
-      const v = text.trim();
-      if (!v) return;
-      pushUser(v);
+    async (text) => {
+      const value = text.trim();
+      if (!value || busy) return;
+
+      pushUser(value);
       setInputEnabled(false);
 
-      if (isQuoteIntent(v)) {
+      // 1. Intención de cotización.
+      if (isQuoteIntent(value)) {
+        styleBrowseModeRef.current = false;
+
         setTimeout(() => {
-          pushBot("¡Claro! Vamos a armar tu cotización — elige la zona corporal para empezar.");
+          setStep("freeform");
+
+          pushBot(
+            "¡Claro! Vamos a armar tu cotización. Elige la zona corporal para empezar."
+          );
+
           setTimeout(stepZona, 350);
         }, 400);
+
         return;
       }
 
-      const faqAnswer = findFaqAnswer(v);
-      setTimeout(() => {
-        if (faqAnswer) {
+      // 2. Saludos, agradecimientos y despedidas.
+      const smallTalkAnswer = findSmallTalkAnswer(value);
+
+      if (smallTalkAnswer) {
+        setTimeout(() => {
+          pushBot(smallTalkAnswer);
+          setInputEnabled(true);
+        }, 400);
+
+        return;
+      }
+
+      // 3. Preguntas frecuentes.
+      const faqAnswer = findFaqAnswer(value);
+
+      if (faqAnswer) {
+        setTimeout(() => {
           pushBot(faqAnswer);
-        } else {
+          setInputEnabled(true);
+        }, 400);
+
+        return;
+      }
+
+      // 4. Detectar consultas sobre artistas, estilos y diseños.
+      const artistQuery = findArtistQuery(value);
+      const styleQuery = findStyleQuery(value);
+      const designQuery = findDesignQuery(value);
+      const mentionedStyle = findMentionedStyle(value);
+
+      // Registrar consultas que podrían requerir nuevas respuestas.
+      logUnansweredQueryAPI({
+        mensaje: value,
+        nombre: user?.name || "",
+        email: user?.email || "",
+        pagina:
+          typeof window !== "undefined"
+            ? window.location.pathname
+            : "",
+      }).catch(() => {});
+
+      // 5. Consultar artistas.
+      if (artistQuery) {
+        setBusy(true);
+
+        try {
+          const artists = await getArtistsWithTimeout();
+
+          const filteredArtists = mentionedStyle
+            ? matchArtistsByStyle(artists, mentionedStyle)
+            : artists;
+
+          const names = filteredArtists
+            .map((artist) => artist.nombre_artistico)
+            .filter(Boolean);
+
+          if (names.length > 0) {
+            pushBot(
+              mentionedStyle
+                ? `Estos son los artistas de InkHaus que trabajan con ${mentionedStyle}:\n${names
+                    .map((name) => `• ${name}`)
+                    .join("\n")}`
+                : `Estos son los artistas disponibles en InkHaus:\n${names
+                    .map((name) => `• ${name}`)
+                    .join("\n")}`
+            );
+          } else {
+            pushBot(
+              mentionedStyle
+                ? `No encontré artistas registrados con la especialidad ${mentionedStyle}. Puedes consultar por otro estilo.`
+                : "Por ahora no encontré artistas registrados en el sistema."
+            );
+          }
+        } catch (error) {
+          console.error("Error al consultar artistas:", error);
+
           pushBot(
-            "No tengo información exacta sobre eso todavía, pero puedo ayudarte igual con tu cotización — y cualquier duda específica te la resuelve el artista directamente al confirmar tu cita."
+            "No pude cargar la lista de artistas en este momento. Intenta nuevamente más tarde."
           );
+        } finally {
+          setBusy(false);
+          setInputEnabled(true);
         }
-        attachOptions(["Continuar con cotización", "Salir"]);
-      }, 400);
+
+        return;
+      }
+
+      // 6. Consultar estilos disponibles.
+      if (styleQuery) {
+        setBusy(true);
+        styleBrowseModeRef.current = true;
+        setStep("estilo");
+
+        try {
+          const artists = await getArtistsWithTimeout();
+          const availableStyles = getAvailableStyles(artists);
+
+          if (availableStyles.length > 0) {
+            pushBot(
+              `Los estilos registrados actualmente en InkHaus son: ${availableStyles.join(", ")}.`
+            );
+          } else {
+            pushBot(
+              "No encontré estilos registrados en las especialidades de los artistas."
+            );
+          }
+
+          attachOptions([
+            ...(availableStyles.length > 0
+              ? availableStyles
+              : STYLE_OPTIONS),
+            CONSULTAR_ARTISTAS,
+            CONTINUAR_COTIZACION,
+          ]);
+        } catch (error) {
+          console.error("Error al consultar estilos:", error);
+
+          pushBot(
+            "No pude consultar los estilos en este momento. Intenta nuevamente más tarde."
+          );
+
+          attachOptions([
+            ...STYLE_OPTIONS,
+            CONSULTAR_ARTISTAS,
+            CONTINUAR_COTIZACION,
+          ]);
+        } finally {
+          setBusy(false);
+          setInputEnabled(true);
+        }
+
+        return;
+      }
+
+      // 7. Consultar diseños y referencias.
+      if (designQuery) {
+        setStep("freeform");
+        styleBrowseModeRef.current = true;
+
+        setTimeout(() => {
+          pushBot(
+            "¡Puedes explorar los diseños y trabajos de nuestros artistas en sus portafolios! Si buscas referencias de un estilo específico, dime cuál te interesa."
+          );
+
+          attachOptions([
+            "Ver estilos disponibles",
+            CONSULTAR_ARTISTAS,
+            CONTINUAR_COTIZACION,
+          ]);
+
+          setInputEnabled(true);
+        }, 300);
+
+        return;
+      }
+
+      // 8. Consulta no reconocida.
+      setTimeout(() => {
+        setStep("freeform");
+
+        if (!user) {
+          pushBot(
+            "Todavía no tengo una respuesta exacta para eso. Puedes reformular tu pregunta, iniciar sesión para contactar al equipo o comenzar una cotización."
+          );
+
+          attachOptions([
+            "Iniciar sesión",
+            CONTINUAR_COTIZACION,
+            "Salir",
+          ]);
+        } else {
+          pendingLiveMessageRef.current = value;
+
+          pushBot(
+            "No tengo una respuesta exacta para eso todavía. Puedes reformular tu pregunta o contactar a nuestro equipo para recibir ayuda."
+          );
+
+          attachOptions([
+            "Abrir chat con el equipo",
+            CONTINUAR_COTIZACION,
+            "Salir",
+          ]);
+        }
+
+        setInputEnabled(true);
+      }, 300);
     },
-    [attachOptions, pushBot, pushUser, stepZona]
+    [
+      attachOptions,
+      busy,
+      pushBot,
+      pushUser,
+      setStep,
+      stepZona,
+      user,
+    ]
   );
 
   return {

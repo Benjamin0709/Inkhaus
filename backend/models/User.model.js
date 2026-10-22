@@ -33,7 +33,10 @@ const userSchema = new mongoose.Schema(
     especialidad: { type: String, default: "", trim: true },
     foto_url: { type: String, default: "" },
     activo: { type: Boolean, default: true },
-  },
+    // ── Campos para restablecimiento de contraseña ──────────
+    resetPasswordToken: { type: String, default: null },
+    resetPasswordExpires: { type: Date, default: null },
+    },
   { timestamps: true }
 );
 

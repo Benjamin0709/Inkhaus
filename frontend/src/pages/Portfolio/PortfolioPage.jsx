@@ -85,22 +85,28 @@ export default function PortfolioPage() {
         <select
           value={styleFilter}
           onChange={(e) => setFilter("style", e.target.value)}
-          className="px-4 py-2 text-xs border outline-none bg-white/5 border-white/10 text-paper focus:border-red"
+          style={{ colorScheme: "dark" }}
+          className="px-4 py-2 text-xs border outline-none bg-ink2 border-white/10 text-paper focus:border-red"
         >
-          <option value="">Todos los estilos</option>
+          <option value="" className="bg-ink2 text-paper">Todos los estilos</option>
           {styles.map((s) => (
-            <option key={s._id} value={s.nombre}>{s.nombre}</option>
+            <option key={s._id} value={s.nombre} className="bg-ink2 text-paper">
+              {s.nombre}
+            </option>
           ))}
         </select>
 
         <select
           value={artistFilter}
           onChange={(e) => setFilter("artist", e.target.value)}
-          className="px-4 py-2 text-xs border outline-none bg-white/5 border-white/10 text-paper focus:border-red"
+          style={{ colorScheme: "dark" }}
+          className="px-4 py-2 text-xs border outline-none bg-ink2 border-white/10 text-paper focus:border-red"
         >
-          <option value="">Todos los artistas</option>
+          <option value="" className="bg-ink2 text-paper">Todos los artistas</option>
           {artists.map((a) => (
-            <option key={a._id} value={a._id}>{a.nombre_artistico}</option>
+            <option key={a._id} value={a._id} className="bg-ink2 text-paper">
+              {a.nombre_artistico}
+            </option>
           ))}
         </select>
 

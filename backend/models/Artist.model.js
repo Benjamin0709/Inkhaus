@@ -20,6 +20,15 @@ const artistSchema = new mongoose.Schema(
         hasta: { type: String, trim: true, required: true }, // "18:00"
       },
     ],
+    
+    tabla_precios: [{
+      zona: String,
+      tamanio: String,
+      precio_min: Number,
+      precio_max: Number,
+      _id: false,
+    }],
+
     foto_url: { type: String, default: "" },
     activo: { type: Boolean, default: true },
   },

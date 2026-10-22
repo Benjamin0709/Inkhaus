@@ -4,15 +4,21 @@ import { getMyArtistProfileAPI, updateArtistAPI } from "../../api/artists.api";
 import { uploadImageAPI } from "../../api/upload.api";
 import { getPortfolioAPI, deletePortfolioAPI } from "../../api/portfolio.api";
 import { getStylesAPI } from "../../api/styles.api";
+import { getArtistPricingAPI, saveArtistPricingAPI } from "../../api/pricing.api";
+import {
+  PRICE_ZONES, PRICE_SIZES, SPECIAL_SIZES,
+  priceKey, pricesArrayToMap, pricesMapToArray,
+  pricingDocsToArray, formatCLP,
+} from "../../constants/pricing";
 
 const DIAS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
 
 export default function EditArtistProfile() {
-  const [artist, setArtist] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [artist, setArtist]           = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState("");
+  const [success, setSuccess]         = useState("");
+  const [saving, setSaving]           = useState(false);
   const [uploadingFoto, setUploadingFoto] = useState(false);
 
   const [form, setForm] = useState({
@@ -25,14 +31,19 @@ export default function EditArtistProfile() {
   });
   const [especialidadInput, setEspecialidadInput] = useState("");
 
-  // ── Mi portafolio ────────────────────────────────────────
-  const [works, setWorks] = useState([]);
+  // ── Portafolio ───────────────────────────────────────────
+  const [works, setWorks]             = useState([]);
   const [loadingWorks, setLoadingWorks] = useState(true);
-  const [deletingId, setDeletingId] = useState(null);
-  const [styles, setStyles] = useState([]);
+  const [deletingId, setDeletingId]   = useState(null);
+  const [styles, setStyles]           = useState([]);
   const [styleFilter, setStyleFilter] = useState("");
   const [portfolioError, setPortfolioError] = useState("");
 
+  // ── Precios ──────────────────────────────────────────────
+  const [precios, setPrecios] = useState({});
+  const [preciosGuardados, setPreciosGuardados] = useState({})
+
+  // ── Carga inicial ────────────────────────────────────────
   useEffect(() => {
     Promise.all([getMyArtistProfileAPI(), getStylesAPI()])
       .then(([artistRes, stylesRes]) => {
@@ -40,13 +51,33 @@ export default function EditArtistProfile() {
         setArtist(a);
         setForm({
           nombre_artistico: a.nombre_artistico || "",
-          bio: a.bio || "",
-          instagram: a.instagram || "",
-          foto_url: a.foto_url || "",
-          especialidades: a.especialidades || [],
-          horarios: a.horarios || [],
+          bio:              a.bio              || "",
+          instagram:        a.instagram        || "",
+          foto_url:         a.foto_url         || "",
+          especialidades:   a.especialidades   || [],
+          horarios:         a.horarios         || [],
         });
         setStyles(stylesRes.data.info || []);
+
+        // Cargar precios desde la colección Pricing 
+        // y hacer fallback a tabla_precios del artista si aún no hay docs
+        getArtistPricingAPI(a._id)
+          .then(({ data }) => {
+            if (data.info?.length) {
+              const mapa = pricesArrayToMap(pricingDocsToArray(data.info));
+              setPrecios(mapa);
+              setPreciosGuardados(mapa);         
+            } else {
+              const mapa = pricesArrayToMap(a.tabla_precios || []);
+              setPrecios(mapa);
+              setPreciosGuardados(mapa);        
+            }
+          })
+          .catch(() => {
+            const mapa = pricesArrayToMap(a.tabla_precios || []);
+            setPrecios(mapa);
+            setPreciosGuardados(mapa);            
+          });
       })
       .catch((err) => {
         setError(err.response?.data?.message || "No se pudo cargar tu perfil de artista");
@@ -59,6 +90,7 @@ export default function EditArtistProfile() {
     loadWorks();
   }, [artist]);
 
+  // ── Portafolio ───────────────────────────────────────────
   const loadWorks = () => {
     if (!artist?._id) return;
     setLoadingWorks(true);
@@ -86,6 +118,7 @@ export default function EditArtistProfile() {
     }
   };
 
+  // ── Formulario general ───────────────────────────────────
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
@@ -106,6 +139,7 @@ export default function EditArtistProfile() {
     }
   };
 
+  // ── Especialidades ───────────────────────────────────────
   const addEspecialidad = () => {
     const v = especialidadInput.trim();
     if (!v || form.especialidades.includes(v)) return;
@@ -117,6 +151,7 @@ export default function EditArtistProfile() {
     setForm((f) => ({ ...f, especialidades: f.especialidades.filter((e) => e !== esp) }));
   };
 
+  // ── Horarios ─────────────────────────────────────────────
   const addHorario = () => {
     setForm((f) => ({ ...f, horarios: [...f.horarios, { dia: "lunes", desde: "10:00", hasta: "18:00" }] }));
   };
@@ -132,15 +167,58 @@ export default function EditArtistProfile() {
     setForm((f) => ({ ...f, horarios: f.horarios.filter((_, i) => i !== idx) }));
   };
 
+  // ── Precios ──────────────────────────────────────────────
+  const formatThousands = (raw) => {
+    const digits = String(raw || "").replace(/\D/g, "");
+    if (!digits) return "";
+    return Number(digits).toLocaleString("es-CL");
+  };
+
+  const parseThousands = (formatted) => formatted.replace(/\D/g, "");
+
+  const updatePrecio = (zona, tamanio, campo, rawInputValue) => {
+    const key = priceKey(zona, tamanio);
+    setPrecios((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], [campo]: parseThousands(rawInputValue) },
+    }));
+  };
+
+  const clearPrecio = (zona, tamanio) => {
+    const key = priceKey(zona, tamanio);
+    setPrecios((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+  
+  // ── Guardar ──────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
     if (!form.nombre_artistico.trim()) return setError("El nombre artístico es obligatorio");
 
+    // Validación básica: min <= max en cada celda completada
+    const tabla = pricesMapToArray(precios);
+    const invalido = tabla.find((p) => p.precio_min > p.precio_max);
+    if (invalido) {
+      return setError(`El precio mínimo no puede ser mayor que el máximo (${invalido.zona} – ${invalido.tamanio})`);
+    }
+  
     try {
       setSaving(true);
-      const { data } = await updateArtistAPI(artist._id, form);
+
+      // 1. Actualizar perfil del artista (incluye tabla_precios embebida como respaldo)
+      const { data } = await updateArtistAPI(artist._id, { ...form, tabla_precios: tabla });
+
+      // 2. Sincronizar con la colección Pricing
+      const pr = await saveArtistPricingAPI(artist._id, tabla);
+      const mapaGuardado = pricesArrayToMap(pricingDocsToArray(pr.data.info));
+      setPrecios(mapaGuardado);
+      setPreciosGuardados(mapaGuardado);      
+
       setArtist(data.info);
       setSuccess("¡Perfil actualizado!");
     } catch (err) {
@@ -150,6 +228,7 @@ export default function EditArtistProfile() {
     }
   };
 
+  // ── Estados de carga / sin perfil ────────────────────────
   if (loading) {
     return (
       <div className="flex justify-center min-h-screen px-12 pt-28">
@@ -168,16 +247,20 @@ export default function EditArtistProfile() {
     );
   }
 
+  // ── Render ───────────────────────────────────────────────
   return (
     <div className="min-h-screen px-8 pb-20 pt-28 md:px-12">
       <div className="max-w-xl mx-auto">
-        <h1 className="mb-1 text-4xl tracking-wide font-display">MI <span className="text-red">PERFIL</span></h1>
+        <h1 className="mb-1 text-4xl tracking-wide font-display">
+          MI <span className="text-red">PERFIL</span>
+        </h1>
         <p className="mb-8 text-sm text-muted">Así te ven tus clientes en la página de artistas</p>
 
-        {error && <div className="px-4 py-3 mb-6 text-sm border bg-red/10 border-red/30 text-red">{error}</div>}
+        {error   && <div className="px-4 py-3 mb-6 text-sm border bg-red/10 border-red/30 text-red">{error}</div>}
         {success && <div className="px-4 py-3 mb-6 text-sm text-green-400 border bg-green-900/20 border-green-700/40">{success}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+
           {/* Foto de perfil */}
           <div className="flex items-center gap-5">
             <div className="flex items-center justify-center flex-shrink-0 w-24 h-24 overflow-hidden text-2xl border rounded-full border-white/15 font-display bg-ink2">
@@ -191,6 +274,7 @@ export default function EditArtistProfile() {
             </label>
           </div>
 
+          {/* Campos básicos */}
           <Field label="Nombre artístico *">
             <input name="nombre_artistico" value={form.nombre_artistico} onChange={handleChange} className={inputCls} />
           </Field>
@@ -203,7 +287,7 @@ export default function EditArtistProfile() {
             <input name="instagram" value={form.instagram} onChange={handleChange} placeholder="@tu_usuario" className={inputCls} />
           </Field>
 
-          {/* Especialidades (tags libres) */}
+          {/* Especialidades */}
           <div>
             <div className="mb-2 text-xs tracking-widest uppercase text-muted">Especialidades</div>
             <div className="flex flex-wrap gap-1.5 mb-2">
@@ -213,7 +297,9 @@ export default function EditArtistProfile() {
                   <button type="button" onClick={() => removeEspecialidad(esp)} className="hover:text-white">✕</button>
                 </span>
               ))}
-              {form.especialidades.length === 0 && <span className="text-xs text-muted">Aún no agregas especialidades.</span>}
+              {form.especialidades.length === 0 && (
+                <span className="text-xs text-muted">Aún no agregas especialidades.</span>
+              )}
             </div>
             <div className="flex gap-2">
               <input
@@ -236,9 +322,13 @@ export default function EditArtistProfile() {
             <div className="flex flex-col gap-2">
               {form.horarios.map((h, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <select value={h.dia} onChange={(e) => updateHorario(i, "dia", e.target.value)}
-                    className="px-3 py-2 text-xs capitalize border outline-none bg-paper/5 border-paper/10 text-paper focus:border-red">
-                    {DIAS.map((d) => <option key={d} value={d}>{d}</option>)}
+                  <select
+                    value={h.dia}
+                    onChange={(e) => updateHorario(i, "dia", e.target.value)}
+                    style={{ colorScheme: "dark" }}
+                    className="px-3 py-2 text-xs capitalize border outline-none bg-ink2 border-paper/10 text-paper focus:border-red"
+                  >
+                    {DIAS.map((d) => <option key={d} value={d} className="bg-ink2 text-paper">{d}</option>)}
                   </select>
                   <input type="time" value={h.desde} onChange={(e) => updateHorario(i, "desde", e.target.value)}
                     className="px-3 py-2 text-xs border outline-none bg-paper/5 border-paper/10 text-paper focus:border-red" />
@@ -255,18 +345,171 @@ export default function EditArtistProfile() {
             </button>
           </div>
 
-          <button type="submit" disabled={saving || uploadingFoto}
-            className="w-full py-4 text-sm font-medium tracking-widest text-white uppercase transition-colors bg-red hover:bg-red-hover disabled:opacity-60">
+          {/* Tabla de precios */}
+          <div className="relative left-1/2 right-1/2 -mx-[50vw] w-screen px-4 lg:px-10">
+            <div className="max-w-5xl mx-auto">
+              <div className="mb-1 text-xs tracking-widest uppercase text-muted">Tabla de precios aproximados</div>
+              <p className="mb-3 text-xs text-muted">
+                Define un rango de precio (CLP) por zona y tamaño. Deja en blanco las combinaciones que no ofrezcas.
+              </p>
+
+              {/* Matriz zona × tamaño */}
+              <div className="overflow-x-auto border border-white/10">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-white/5">
+                      <th className="sticky left-0 p-3 text-left border-r bg-ink2 border-white/10 text-muted min-w-[140px]">Zona</th>
+                      {PRICE_SIZES.map((s) => (
+                        <th key={s.value} className="p-3 text-center border-r border-white/10 text-muted min-w-[170px]">
+                          {s.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {PRICE_ZONES.map((zona) => (
+                      <tr key={zona} className="border-t border-white/10">
+                        <td className="sticky left-0 p-3 font-medium border-r bg-ink2 border-white/10 text-paper">{zona}</td>
+                        {PRICE_SIZES.map((s) => {
+                          const key = priceKey(zona, s.value);
+                          const val = precios[key] || {};
+                          const hasValue = val.min || val.max;
+                          return (
+                            <td key={s.value} className="p-2 border-r border-white/10">
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={formatThousands(val.min)}
+                                  onChange={(e) => updatePrecio(zona, s.value, "min", e.target.value)}
+                                  placeholder="Min"
+                                  className="w-full px-2 py-1.5 text-[12px] bg-paper/5 border border-paper/10 focus:border-red outline-none text-paper placeholder-muted"
+                                />
+                                <span className="text-muted">–</span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={formatThousands(val.max)}
+                                  onChange={(e) => updatePrecio(zona, s.value, "max", e.target.value)}
+                                  placeholder="Max"
+                                  className="w-full px-2 py-1.5 text-[12px] bg-paper/5 border border-paper/10 focus:border-red outline-none text-paper placeholder-muted"
+                                />
+                                {hasValue && (
+                                  <button
+                                    type="button"
+                                    onClick={() => clearPrecio(zona, s.value)}
+                                    className="flex-shrink-0 text-muted hover:text-red"
+                                    aria-label={`Quitar precio de ${zona} ${s.label}`}
+                                  >
+                                    ✕
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Piezas de región completa */}
+              <div className="mt-4">
+                <div className="mb-2 text-xs tracking-widest uppercase text-muted">Piezas de región completa</div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {SPECIAL_SIZES.map((s) => {
+                    const key = priceKey(s.zonaLabel, s.value);
+                    const val = precios[key] || {};
+                    const hasValue = val.min || val.max;
+                    return (
+                      <div key={s.value} className="flex items-center gap-2 p-3 border border-white/10">
+                        <span className="flex-shrink-0 w-32 text-xs text-paper">{s.label}</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={formatThousands(val.min)}
+                          onChange={(e) => updatePrecio(s.zonaLabel, s.value, "min", e.target.value)}
+                          placeholder="Min"
+                          className="w-full px-2 py-1.5 text-[12px] bg-paper/5 border border-paper/10 focus:border-red outline-none text-paper placeholder-muted"
+                        />
+                        <span className="text-muted">–</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={formatThousands(val.max)}
+                          onChange={(e) => updatePrecio(s.zonaLabel, s.value, "max", e.target.value)}
+                          placeholder="Max"
+                          className="w-full px-2 py-1.5 text-[12px] bg-paper/5 border border-paper/10 focus:border-red outline-none text-paper placeholder-muted"
+                        />
+                        {hasValue && (
+                          <button
+                            type="button"
+                            onClick={() => clearPrecio(s.zonaLabel, s.value)}
+                            className="flex-shrink-0 text-muted hover:text-red"
+                            aria-label={`Quitar precio de ${s.label}`}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={saving || uploadingFoto}
+            className="w-full py-4 text-sm font-medium tracking-widest text-white uppercase transition-colors bg-red hover:bg-red-hover disabled:opacity-60"
+          >
             {saving ? "Guardando..." : "Guardar cambios"}
           </button>
         </form>
 
-        {/* ── Mi portafolio ────────────────────────────────────── */}
+        {/* ── Precios publicados ─────────────────── */}
+        <div className="mt-16">
+          <h2 className="mb-4 text-2xl tracking-wide font-display">PRECIOS PUBLICADOS</h2>
+          {Object.keys(precios).length === 0 ? (
+            <p className="text-sm text-muted">Aún no has guardado precios.</p>
+          ) : (
+            <div className="overflow-x-auto border border-white/10">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-white/5 text-muted">
+                    <th className="p-3 text-left">Zona</th>
+                    <th className="p-3 text-left">Tamaño</th>
+                    <th className="p-3 text-left">Rango</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(precios).map(([key, val]) => {
+                    const [zona, tamanio] = key.split("|");
+                    return (
+                      <tr key={key} className="border-t border-white/10">
+                        <td className="p-3 text-paper">{zona}</td>
+                        <td className="p-3 capitalize text-paper">{tamanio.replace("_", " ")}</td>
+                        <td className="p-3 text-paper">
+                          {val.min && val.max
+                            ? `${formatCLP(val.min)} – ${formatCLP(val.max)}`
+                            : <span className="text-muted">Incompleto</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* ── Mi portafolio ─────────────────────────────────────── */}
         <div className="mt-16">
           <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
             <h2 className="text-2xl tracking-wide font-display">MI PORTAFOLIO</h2>
-            <Link to="/artista/portafolio"
-              className="text-xs tracking-widest uppercase text-red hover:underline">
+            <Link to="/artista/portafolio" className="text-xs tracking-widest uppercase text-red hover:underline">
               + Subir trabajo nuevo
             </Link>
           </div>
@@ -274,15 +517,19 @@ export default function EditArtistProfile() {
           <select
             value={styleFilter}
             onChange={(e) => setStyleFilter(e.target.value)}
-            className="px-4 py-2 mb-6 text-xs border outline-none bg-white/5 border-white/10 text-paper focus:border-red"
+            style={{ colorScheme: "dark" }}
+            className="px-4 py-2 mb-6 text-xs border outline-none bg-ink2 border-white/10 text-paper focus:border-red"
           >
             <option value="">Todos los estilos</option>
             {styles.map((s) => (
-              <option key={s._id} value={s.nombre}>{s.nombre}</option>
+              <option key={s._id} value={s.nombre} className="bg-ink2 text-paper"> {s.nombre}
+              </option>
             ))}
           </select>
 
-          {portfolioError && <div className="px-4 py-3 mb-4 text-sm border bg-red/10 border-red/30 text-red">{portfolioError}</div>}
+          {portfolioError && (
+            <div className="px-4 py-3 mb-4 text-sm border bg-red/10 border-red/30 text-red">{portfolioError}</div>
+          )}
 
           {loadingWorks ? (
             <div className="flex justify-center py-10">
@@ -290,7 +537,9 @@ export default function EditArtistProfile() {
             </div>
           ) : filteredWorks.length === 0 ? (
             <p className="text-sm text-muted">
-              {styleFilter ? `No tienes trabajos publicados en el estilo "${styleFilter}".` : "Aún no has publicado ningún trabajo."}
+              {styleFilter
+                ? `No tienes trabajos publicados en el estilo "${styleFilter}".`
+                : "Aún no has publicado ningún trabajo."}
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -305,12 +554,18 @@ export default function EditArtistProfile() {
                       </div>
                     </div>
                     <div className="flex gap-1.5">
-                      <Link to={`/artista/portafolio?edit=${w._id}`}
-                        className="flex-1 py-1.5 text-[10px] text-center uppercase tracking-widest bg-white/10 hover:bg-white/20 text-paper">
+                      <Link
+                        to={`/artista/portafolio?edit=${w._id}`}
+                        className="flex-1 py-1.5 text-[10px] text-center uppercase tracking-widest bg-white/10 hover:bg-white/20 text-paper"
+                      >
                         Editar
                       </Link>
-                      <button type="button" onClick={() => handleDeleteWork(w._id)} disabled={deletingId === w._id}
-                        className="flex-1 py-1.5 text-[10px] uppercase tracking-widest bg-red/80 hover:bg-red text-white disabled:opacity-60">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteWork(w._id)}
+                        disabled={deletingId === w._id}
+                        className="flex-1 py-1.5 text-[10px] uppercase tracking-widest bg-red/80 hover:bg-red text-white disabled:opacity-60"
+                      >
                         {deletingId === w._id ? "..." : "Eliminar"}
                       </button>
                     </div>
@@ -320,6 +575,7 @@ export default function EditArtistProfile() {
             </div>
           )}
         </div>
+
       </div>
     </div>
   );

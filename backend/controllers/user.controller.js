@@ -1,4 +1,5 @@
 import User from "../models/User.model.js";
+import { sendWelcomeEmail } from "../services/email.service.js";
 
 // ─── REGISTER ─────────────────────────────────────────────
 export const createUser = async (req, res) => {
@@ -7,8 +8,9 @@ export const createUser = async (req, res) => {
     if (await User.findOne({ email })) {
       return res.status(400).json({ success: false, message: "El email ya está registrado" });
     }
-    const user = new User(req.body);       // password se hashea en pre("save")
+    const user = new User(req.body);       
     await user.save();
+    sendWelcomeEmail(user.email, user.name).catch(() => {});
     res.status(201).json({
       success: true,
       message: "Cuenta creada correctamente",
@@ -95,3 +97,60 @@ export const deleteUser = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+ // ─── UPDATE MY PROFILE ───────────────────────────────────
+export const updateMe = async (req, res) => {
+  try {
+    const { name, lastname, phone } = req.body;
+    const update = {};
+
+    if (name !== undefined) {
+      if (String(name).trim().length < 2) {
+        return res.status(400).json({
+          success: false,
+          message: "El nombre debe tener al menos 2 caracteres",
+        });
+      }
+
+      update.name = String(name).trim();
+    }
+
+    if (lastname !== undefined) {
+      update.lastname = String(lastname).trim();
+    }
+
+    if (phone !== undefined) {
+      update.phone = String(phone).trim();
+    }
+
+    // Solo permite modificar los campos indicados.
+    // No modifica roles, email ni password.
+    const user = await User.findByIdAndUpdate(
+      req.auth.id,
+      update,
+      {
+        new: true,
+        runValidators: true,
+      }
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Usuario no encontrado",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Perfil actualizado correctamente",
+      user,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+

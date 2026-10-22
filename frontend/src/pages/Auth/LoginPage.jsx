@@ -81,11 +81,9 @@ export default function LoginPage() {
               className="w-full px-4 py-3 text-sm transition-colors border outline-none bg-paper/5 border-paper/10 focus:border-red text-paper placeholder-muted" />
           </Field>
 
-          <div className="flex justify-end">
-            <a href="#" className="text-xs tracking-wide transition-colors text-muted hover:text-paper">
-              ¿Olvidaste tu contraseña?
-            </a>
-          </div>
+          <Link to="/forgot-password" className="text-xs text-muted hover:text-paper">
+            ¿Olvidaste tu contraseña?
+          </Link>
 
           <button type="submit" disabled={loading}
             className="w-full py-4 text-sm font-medium tracking-widest text-white uppercase transition-colors bg-red hover:bg-red-hover disabled:opacity-60">

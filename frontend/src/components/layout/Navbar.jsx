@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import BookingCTALink from "../../components/ui/BookingCTALink";
 
 export default function Navbar() {
   const { user, logout, hasRole } = useAuth();
@@ -22,8 +23,9 @@ export default function Navbar() {
         {[
           { label: "PORTAFOLIO", href: "/portfolio" },
           { label: "ARTISTAS",   href: "/artists" },
-          { label: "PROCESO",    href: "/#process" },
-          { label: "CONTACTO",   href: "/#contact" },
+          { label: "PROCESO",    href: "/proceso" },
+          { label: "Cuidados",    href: "/cuidados" },
+          { label: "CONTACTO",   href: "/contact" },
         ].map((l) => (
           <a key={l.label} href={l.href}
             className="text-xs tracking-widest uppercase transition-colors text-muted hover:text-paper">
@@ -37,6 +39,9 @@ export default function Navbar() {
             </Link>
             <Link to="/artista/perfil" className="text-xs tracking-widest uppercase transition-colors text-gold hover:text-paper">
               MI PERFIL
+            </Link>
+            <Link to="/artista/citas" className="text-xs tracking-widest uppercase transition-colors text-gold hover:text-paper">
+              MI AGENDA
             </Link>
           </>
         )}
@@ -52,9 +57,9 @@ export default function Navbar() {
       <div className="flex items-center gap-3">
         {user ? (
           <>
-            <span className="hidden text-xs text-muted sm:block">
+            <Link to="/mi-cuenta" className="hidden text-xs text-muted sm:block hover:text-paper">
               Hola, <span className="font-medium text-paper">{user.name}</span>
-            </span>
+            </Link>
             <button onClick={handleLogout}
               className="text-xs tracking-widest uppercase transition-colors text-muted hover:text-paper">
               Salir
@@ -66,10 +71,9 @@ export default function Navbar() {
               className="text-xs tracking-widest uppercase transition-colors text-muted hover:text-paper">
               Ingresar
             </Link>
-            <Link to="/register"
-              className="px-5 py-2 text-xs font-medium tracking-widest text-white uppercase transition-colors bg-red hover:bg-red-hover">
+            <BookingCTALink className="px-8 py-4 text-sm font-medium tracking-widest text-white uppercase transition-colors bg-red hover:bg-red-hover">
               Reservar cita
-            </Link>
+            </BookingCTALink>
           </>
         )}
       </div>

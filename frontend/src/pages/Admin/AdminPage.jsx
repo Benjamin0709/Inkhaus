@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { Link } from "react-router-dom";
 import {
   getAllArtistsAdminAPI,
   createArtistFullAPI,
@@ -112,7 +113,7 @@ export default function AdminPage() {
     setForm({
       name: artist.user?.name || "",
       email: artist.user?.email || "",
-      password: "", // no se edita acá
+      password: "", 
       nombre_artistico: artist.nombre_artistico || "",
       bio: artist.bio || "",
       instagram: artist.instagram || "",
@@ -227,15 +228,38 @@ export default function AdminPage() {
       </h1>
       <p className="mb-10 text-sm text-muted">Bienvenido, {user?.name}.</p>
 
-      {/* Módulos aún no implementados */}
-      <div className="grid gap-6 md:grid-cols-2 mb-14">
-        {["Tabla de precios", "Reportes y citas"].map((t) => (
-          <div key={t} className="p-8 border cursor-not-allowed border-paper/10 opacity-40">
-            <div className="mb-2 text-xl tracking-wider font-display">{t}</div>
-            <div className="text-xs tracking-widest uppercase text-muted">Próximamente — TS-5</div>
-          </div>
-        ))}
-      </div>
+      {/* Accesos rápidos */}
+    <div className="grid gap-6 mb-14 md:grid-cols-3">
+      <Link to="/artista/citas"
+        className="p-8 transition-colors border border-paper/10 hover:border-red/50 group">
+        <div className="mb-2 text-xl tracking-wider transition-colors font-display group-hover:text-red">
+          Todas las citas
+        </div>
+        <div className="text-xs tracking-widest uppercase text-muted">
+          Ver, confirmar, reagendar y cancelar citas de todos los artistas
+        </div>
+      </Link>
+
+      <Link to="/admin/reportes"
+        className="p-8 transition-colors border border-paper/10 hover:border-red/50 group">
+        <div className="mb-2 text-xl tracking-wider transition-colors font-display group-hover:text-red">
+          Reportes
+        </div>
+        <div className="text-xs tracking-widest uppercase text-muted">
+          Preguntas sin responder del chatbot y mensajes a artistas
+        </div>
+      </Link>
+
+      <Link to="/admin/precios"
+        className="p-8 transition-colors border border-paper/10 hover:border-red/50 group">
+        <div className="mb-2 text-xl tracking-wider transition-colors font-display group-hover:text-red">
+          Tabla de precios
+        </div>
+        <div className="text-xs tracking-widest uppercase text-muted">
+          Revisa y edita los precios aproximados por artista
+        </div>
+      </Link>
+    </div>
 
       {/* ── Gestión de artistas ─────────────────────────────────────── */}
       <section>
@@ -366,6 +390,7 @@ export default function AdminPage() {
                     <select
                       value={h.dia}
                       onChange={(e) => updateHorario(i, "dia", e.target.value)}
+                      style={{ colorScheme: "dark" }}        
                       className={`${inputCls} flex-1 text-xs`}
                     >
                       {DIAS.map((d) => (
