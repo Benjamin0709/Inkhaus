@@ -13,7 +13,7 @@ export default function NotFound() {
         </p>
         <div className="nf__links">
           <Link className="nf__btn nf__btn--solid" to="/">Ir al inicio</Link>
-          <Link className="nf__btn" to="/contacto">Contactar al estudio</Link>
+          <Link className="nf__btn" to="/contact">Contactar al estudio</Link>
         </div>
       </div>
     </main>
