@@ -6,13 +6,6 @@ const MAX_ZOOM = 4; // veces el zoom "rellenar"
 
 /**
  * Modal para encuadrar una foto dentro de un círculo.
- * - Arrastrar para mover, rueda / slider / pellizco para zoom.
- * - "Ajustar" muestra la imagen completa; "Rellenar" llena el círculo.
- *
- * Props:
- *   file:      File de imagen elegido por el usuario
- *   onCancel:  () => void
- *   onConfirm: (File) => void  → recibe un PNG cuadrado de 512×512
  */
 export default function AvatarCropper({ file, onCancel, onConfirm }) {
   const [src, setSrc]       = useState(null);

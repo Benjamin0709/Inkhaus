@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { getMyArtistProfileAPI, updateArtistAPI } from "../../api/artists.api";
 import { uploadImageAPI } from "../../api/upload.api";
 import AvatarCropper from "../../components/ui/AvatarCropper";
+import Avatar from "../../components/ui/Avatar";
 import { getPortfolioAPI, deletePortfolioAPI } from "../../api/portfolio.api";
 import { getStylesAPI } from "../../api/styles.api";
 import { getArtistPricingAPI, saveArtistPricingAPI } from "../../api/pricing.api";
@@ -275,11 +276,7 @@ export default function EditArtistProfile() {
 
           {/* Foto de perfil */}
           <div className="flex items-center gap-5">
-            <div className="flex items-center justify-center flex-shrink-0 w-24 h-24 overflow-hidden text-2xl border rounded-full border-white/15 font-display bg-ink2">
-              {form.foto_url
-                ? <img src={form.foto_url} alt={form.nombre_artistico} className="object-cover w-full h-full" />
-                : form.nombre_artistico?.slice(0, 2) || "?"}
-            </div>
+            <Avatar src={form.foto_url} name={form.nombre_artistico} className="w-24 h-24 text-2xl" />
             <label className="px-4 py-2 text-xs tracking-widest uppercase transition-colors border cursor-pointer border-white/15 text-muted hover:border-white/30 hover:text-paper">
               {uploadingFoto ? "Subiendo..." : "Cambiar foto"}
               <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFotoChange} disabled={uploadingFoto} className="hidden" />

@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { getArtistAPI } from "../../api/artists.api";
 import { getPortfolioAPI } from "../../api/portfolio.api";
 import ImageCarousel from "../../components/ui/ImageCarousel";
+import Avatar from "../../components/ui/Avatar";
 import { useLiveChat } from "../../context/LiveChatContext";
 import { createConversationAPI } from "../../api/conversation.api";
 import { useAuth } from "../../context/AuthContext";
@@ -69,11 +70,7 @@ export default function ArtistProfilePage() {
 
       <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between mb-14">
         <div className="flex flex-col gap-8 md:flex-row">
-          <div className="flex items-center justify-center flex-shrink-0 w-32 h-32 overflow-hidden text-3xl border rounded-full border-white/15 font-display bg-ink2">
-            {artist.foto_url
-              ? <img src={artist.foto_url} alt={artist.nombre_artistico} className="object-cover w-full h-full" />
-              : artist.nombre_artistico?.slice(0, 2)}
-          </div>
+          <Avatar src={artist.foto_url} name={artist.nombre_artistico} className="w-32 h-32 text-3xl" />
           <div>
             <h1 className="mb-1 text-4xl tracking-wide font-display">{artist.nombre_artistico}</h1>
             <div className="mb-4 text-xs tracking-widest uppercase text-red">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getArtistsAPI } from "../../api/artists.api";
+import Avatar from "../../components/ui/Avatar";
 
 export default function ArtistsListPage() {
   const [artists, setArtists] = useState([]);
@@ -27,11 +28,7 @@ export default function ArtistsListPage() {
           {artists.map((a) => (
             <div key={a._id} className="flex flex-col transition-colors border border-white/10 hover:border-white/25 p-7">
               <div className="flex items-center gap-4 mb-4">
-                <div className="flex items-center justify-center flex-shrink-0 overflow-hidden text-lg border rounded-full w-14 h-14 border-white/15 font-display bg-ink2">
-                  {a.foto_url
-                    ? <img src={a.foto_url} alt={a.nombre_artistico} className="object-cover w-full h-full" />
-                    : a.nombre_artistico?.slice(0, 2)}
-                </div>
+                <Avatar src={a.foto_url} name={a.nombre_artistico} className="w-14 h-14 text-lg" />
                 <div>
                   <div className="text-xl tracking-wide font-display">{a.nombre_artistico}</div>
                   <div className="text-[10px] tracking-widest text-red uppercase">
