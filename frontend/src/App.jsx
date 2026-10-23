@@ -13,7 +13,6 @@ import UploadWork from "./pages/Artists/ArtistsUploadWork";
 import EditArtistProfile from "./pages/Artists/EditArtistProfile";
 import PrivateRoute from "./components/auth/PrivateRoute";
 import BookAppointmentPage from "./pages/Artists/BookAppointmentPage";
-import MyAppointmentsPage from "./pages/Account/MyAppointmentsPage";
 import ArtistAppointmentsPage from "./pages/Artists/ArtistAppointmentsPage";
 import ReportsPage from "./pages/Admin/ReportsPage";
 import ForgotPasswordPage from "./pages/Auth/ForgotPasswordPage";
@@ -26,6 +25,10 @@ import LiveChatWidget from "./components/livechat/LiveChatWidget";
 import ProcessPage from "./pages/Process/ProcessPage";
 import CarePage from "./pages/Care/CarePage";
 import AccountPage from "./pages/Account/AccountPage";
+import NotFound from './pages/Notfound';
+import Terminos from './pages/legal/Terminos';
+import Privacidad from './pages/legal/Privacidad';
+import Devoluciones from './pages/legal/Devoluciones';
 
 
 
@@ -119,6 +122,10 @@ export default function App() {
             </PrivateRoute>
           }
         />
+        <Route path="/terminos" element={<Terminos />} />
+        <Route path="/privacidad" element={<Privacidad />} />
+        <Route path="/devoluciones" element={<Devoluciones />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
       <Footer />
       <ChatbotWidget />
