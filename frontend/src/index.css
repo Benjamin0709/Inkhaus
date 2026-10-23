@@ -35,3 +35,7 @@ body::before {
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: var(--inkHaus); }
 ::-webkit-scrollbar-thumb { background: var(--red); border-radius: 2px; }
+
+/* Responsive base */
+html { -webkit-text-size-adjust: 100%; }
+img, video, svg { max-width: 100%; }
