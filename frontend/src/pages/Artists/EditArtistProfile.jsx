@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getMyArtistProfileAPI, updateArtistAPI } from "../../api/artists.api";
 import { uploadImageAPI } from "../../api/upload.api";
+import AvatarCropper from "../../components/ui/AvatarCropper";
 import { getPortfolioAPI, deletePortfolioAPI } from "../../api/portfolio.api";
 import { getStylesAPI } from "../../api/styles.api";
 import { getArtistPricingAPI, saveArtistPricingAPI } from "../../api/pricing.api";
@@ -20,6 +21,7 @@ export default function EditArtistProfile() {
   const [success, setSuccess]         = useState("");
   const [saving, setSaving]           = useState(false);
   const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [fotoToCrop, setFotoToCrop]  = useState(null); // File pendiente de encuadrar
 
   const [form, setForm] = useState({
     nombre_artistico: "",
@@ -124,13 +126,23 @@ export default function EditArtistProfile() {
     setForm((f) => ({ ...f, [name]: value }));
   };
 
-  const handleFotoChange = async (e) => {
+  // 1) El artista elige un archivo → se abre el recortador
+  const handleFotoChange = (e) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // permite volver a elegir el mismo archivo
     if (!file) return;
+    if (file.size > 8 * 1024 * 1024) return setError("La imagen supera el máximo de 8 MB");
+    setError("");
+    setFotoToCrop(file);
+  };
+
+  // 2) Confirma el encuadre → se sube el PNG cuadrado resultante
+  const handleFotoCropped = async (croppedFile) => {
+    setFotoToCrop(null);
     setUploadingFoto(true);
     setError("");
     try {
-      const { data } = await uploadImageAPI(file);
+      const { data } = await uploadImageAPI(croppedFile);
       setForm((f) => ({ ...f, foto_url: data.url }));
     } catch (err) {
       setError(err.response?.data?.message || "Error al subir la foto");
@@ -273,6 +285,14 @@ export default function EditArtistProfile() {
               <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFotoChange} disabled={uploadingFoto} className="hidden" />
             </label>
           </div>
+
+          {fotoToCrop && (
+            <AvatarCropper
+              file={fotoToCrop}
+              onCancel={() => setFotoToCrop(null)}
+              onConfirm={handleFotoCropped}
+            />
+          )}
 
           {/* Campos básicos */}
           <Field label="Nombre artístico *">
