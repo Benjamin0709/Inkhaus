@@ -84,7 +84,7 @@ inkhaus/
 
 ### Variables de entorno del backend
 
-Crea el archivo `backend/.env` (está en `.gitignore`, no lo subas al repositorio):
+Crea el archivo `backend/.env`:
 
 ```env
 # Servidor
