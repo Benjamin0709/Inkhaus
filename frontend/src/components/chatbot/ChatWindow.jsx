@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { formatCLP } from "./chatbotEngine";
+import { assetUrl } from "../../utils/assetUrl";
 
 function QuoteCard({ quote }) {
   return (
@@ -28,7 +29,7 @@ function GalleryRow({ items }) {
       {items.map((it, i) => (
         <div key={i} className="flex-shrink-0 w-20 h-20 overflow-hidden border rounded-md border-white/10 bg-ink2">
           {it.imagen_url && (
-            <img src={it.imagen_url} alt={it.titulo} className="object-cover w-full h-full" />
+            <img src={assetUrl(it.imagen_url)} alt={it.titulo} className="object-cover w-full h-full" />
           )}
         </div>
       ))}

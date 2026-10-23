@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { assetUrl } from "../../utils/assetUrl";
 
 export default function ImageCarousel({ images = [], alt = "", className = "", intervalMs = 5000 }) {
   const [index, setIndex] = useState(0);
@@ -49,7 +50,7 @@ export default function ImageCarousel({ images = [], alt = "", className = "", i
       {images.map((src, i) => (
         <img
           key={src + i}
-          src={src}
+          src={assetUrl(src)}
           alt={alt}
           className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
             i === index ? "opacity-100" : "opacity-0"

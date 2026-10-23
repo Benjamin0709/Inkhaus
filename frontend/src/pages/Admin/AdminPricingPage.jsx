@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getArtistPricingAPI, saveArtistPricingAPI } from "../../api/pricing.api";
 import { getArtistsAPI } from "../../api/artists.api";
+import { assetUrl } from "../../utils/assetUrl";
 import {
   PRICE_ZONES, PRICE_SIZES, SPECIAL_SIZES,
   priceKey, pricesArrayToMap, pricesMapToArray,
@@ -108,7 +109,7 @@ export default function AdminPricingPage() {
           </select>
         )}
         {selectedArtist?.foto_url && (
-          <img src={selectedArtist.foto_url} alt={selectedArtist.nombre_artistico}
+          <img src={assetUrl(selectedArtist.foto_url)} alt={selectedArtist.nombre_artistico}
             className="object-cover w-8 h-8 border rounded-full border-white/15" />
         )}
         {selectedArtist && (

@@ -4,6 +4,7 @@ import { getMyArtistProfileAPI, updateArtistAPI } from "../../api/artists.api";
 import { uploadImageAPI } from "../../api/upload.api";
 import AvatarCropper from "../../components/ui/AvatarCropper";
 import Avatar from "../../components/ui/Avatar";
+import { assetUrl } from "../../utils/assetUrl";
 import { getPortfolioAPI, deletePortfolioAPI } from "../../api/portfolio.api";
 import { getStylesAPI } from "../../api/styles.api";
 import { getArtistPricingAPI, saveArtistPricingAPI } from "../../api/pricing.api";
@@ -562,7 +563,7 @@ export default function EditArtistProfile() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {filteredWorks.map((w) => (
                 <div key={w._id} className="relative overflow-hidden border border-white/10 group aspect-square bg-ink2">
-                  <img src={w.imagenes_urls?.[0]} alt={w.titulo} className="object-cover w-full h-full" />
+                  <img src={assetUrl(w.imagenes_urls?.[0])} alt={w.titulo} className="object-cover w-full h-full" />
                   <div className="absolute inset-0 flex flex-col justify-between p-2 transition-opacity opacity-0 bg-ink/70 group-hover:opacity-100">
                     <div className="text-[11px] leading-tight text-paper">
                       <div className="font-medium">{w.titulo}</div>

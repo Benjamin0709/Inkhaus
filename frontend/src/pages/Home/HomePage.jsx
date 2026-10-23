@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { getArtistsAPI } from "../../api/artists.api";
 import { getPortfolioAPI } from "../../api/portfolio.api";
 import { getStylesAPI } from "../../api/styles.api";
+import { assetUrl } from "../../utils/assetUrl";
 import BookingCTALink from "../../components/ui/BookingCTALink";
 
 export default function HomePage() {
@@ -112,7 +113,7 @@ export default function HomePage() {
                   className="relative overflow-hidden text-left group aspect-square bg-ink2"
                 >
                   {img ? (
-                    <img src={img} alt={style.nombre} className="absolute inset-0 object-cover w-full h-full transition-transform duration-500 group-hover:scale-105" />
+                    <img src={assetUrl(img)} alt={style.nombre} className="absolute inset-0 object-cover w-full h-full transition-transform duration-500 group-hover:scale-105" />
                   ) : (
                     <div className="absolute inset-0 bg-gradient-to-br from-ink2 to-black" />
                   )}
@@ -158,7 +159,7 @@ export default function HomePage() {
                 className="p-6 text-left transition-colors border cursor-pointer md:p-8 border-paper/10 hover:border-paper/30 group"
               >
                 <div className="flex items-center justify-center w-16 h-16 mb-6 overflow-hidden text-xl transition-colors border rounded-full border-paper/20 font-display text-paper group-hover:border-red group-hover:text-red">
-                  {a.foto_url ? <img src={a.foto_url} alt={a.nombre_artistico} className="object-cover w-full h-full" /> : a.nombre_artistico?.slice(0, 2)}
+                  {a.foto_url ? <img src={assetUrl(a.foto_url)} alt={a.nombre_artistico} className="object-cover w-full h-full" /> : a.nombre_artistico?.slice(0, 2)}
                 </div>
                 <div className="mb-1 text-xl tracking-wider font-display">{a.nombre_artistico}</div>
                 <div className="mb-4 text-xs tracking-widest uppercase text-red">

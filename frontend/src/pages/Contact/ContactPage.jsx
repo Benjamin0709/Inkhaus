@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getArtistsAPI } from "../../api/artists.api";
+import { assetUrl } from "../../utils/assetUrl";
 import { sendContactMessageAPI } from "../../api/contact.api";
 
 const STUDIO_EMAIL = "inkhausweb@gmail.com";
@@ -98,7 +99,7 @@ export default function ContactPage() {
                     className="flex items-center gap-3 p-3 transition-colors border border-white/10 hover:border-red/40 group"
                   >
                     <div className="flex items-center justify-center flex-shrink-0 w-10 h-10 overflow-hidden text-xs border rounded-full border-white/15 font-display bg-ink2">
-                      {a.foto_url ? <img src={a.foto_url} alt={a.nombre_artistico} className="object-cover w-full h-full" /> : a.nombre_artistico?.slice(0, 2)}
+                      {a.foto_url ? <img src={assetUrl(a.foto_url)} alt={a.nombre_artistico} className="object-cover w-full h-full" /> : a.nombre_artistico?.slice(0, 2)}
                     </div>
                     <div className="min-w-0">
                       <div className="text-sm text-paper group-hover:text-red">{a.nombre_artistico}</div>

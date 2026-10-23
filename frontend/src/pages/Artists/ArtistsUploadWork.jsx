@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { getMyArtistProfileAPI } from "../../api/artists.api";
 import { getStylesAPI } from "../../api/styles.api";
 import { uploadImageAPI } from "../../api/upload.api";
+import { assetUrl } from "../../utils/assetUrl";
 import { createPortfolioAPI, getPortfolioAPI, updatePortfolioAPI, deletePortfolioAPI } from "../../api/portfolio.api";
 
 const emptyForm = { titulo: "", descripcion: "", zona_corporal: "", styles: [], destacado: false };
@@ -233,7 +234,7 @@ export default function UploadWork() {
               <div className="grid grid-cols-3 gap-2 mb-2">
                 {existingImages.map((src, i) => (
                   <div key={`existing-${i}`} className="relative aspect-square">
-                    <img src={src} alt={`actual-${i}`} className="object-cover w-full h-full border border-white/10" />
+                    <img src={assetUrl(src)} alt={`actual-${i}`} className="object-cover w-full h-full border border-white/10" />
                     <button type="button" onClick={() => removeExistingImage(i)}
                       className="absolute top-1 right-1 bg-black/70 text-white text-[10px] w-5 h-5 flex items-center justify-center">✕</button>
                     {i === 0 && (
@@ -343,7 +344,7 @@ export default function UploadWork() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {works.map((w) => (
                 <div key={w._id} className="relative overflow-hidden border border-white/10 group aspect-square bg-ink2">
-                  <img src={w.imagenes_urls?.[0]} alt={w.titulo} className="object-cover w-full h-full" />
+                  <img src={assetUrl(w.imagenes_urls?.[0])} alt={w.titulo} className="object-cover w-full h-full" />
                   <div className="absolute inset-0 flex flex-col justify-between p-2 transition-opacity opacity-0 bg-ink/70 group-hover:opacity-100">
                     <div className="text-[11px] leading-tight text-paper">
                       <div className="font-medium">{w.titulo}</div>
