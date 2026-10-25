@@ -3,6 +3,7 @@ import { getQuoteAPI } from "../../api/pricing.api";
 import { getArtistsAPI } from "../../api/artists.api";
 import { useAuth } from "../../context/AuthContext";
 import { getPortfolioAPI } from "../../api/portfolio.api";
+import { getStylesAPI } from "../../api/styles.api";
 import { logUnansweredQueryAPI } from "../../api/chatbotQuery.api";
 import {
   createConversationAPI,
@@ -18,6 +19,7 @@ import {
   getZoneTip,
   zoneBase,
   matchArtistsByStyle,
+  normalizeStyle,
   CAMBIAR_ZONA,
   STEPS,
   findFaqAnswer,
@@ -39,14 +41,6 @@ const CONTINUAR_COTIZACION = "Continuar con la cotización";
 const CONSULTAR_ARTISTAS = "Consultar artistas";
  
 // ── Funciones auxiliares ──────────────────────────────────────────────
- 
-const normalizeForMatch = (value) =>
-  (value || "")
-    .toString()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
  
 const getArtistsWithTimeout = async () => {
   let timeoutId;
@@ -126,8 +120,103 @@ const getPortfolioItems = (data) => {
   return [];
 };
  
+// ── Estilos desde la base de datos ────────────────────────────────────
+// Fuente principal: colección Style (/styles), la misma que administra el admin
+// y que se asigna a cada trabajo del portafolio.
+// Respaldo: especialidades de los artistas → lista fija del código.
+ 
+const STYLES_CACHE_MS = 60 * 1000;
+let stylesCache = { at: 0, names: [] };
+ 
+const getDbStyleNames = async () => {
+  if (stylesCache.names.length > 0 && Date.now() - stylesCache.at < STYLES_CACHE_MS) {
+    return stylesCache.names;
+  }
+ 
+  let timeoutId;
+ 
+  try {
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new Error("La API de estilos tardó demasiado en responder.")),
+        API_TIMEOUT
+      );
+    });
+ 
+    const response = await Promise.race([getStylesAPI(), timeout]);
+    const data = response?.data;
+    const list = Array.isArray(data) ? data : data?.info || [];
+ 
+    const names = [
+      ...new Set(
+        list
+          .map((style) => (typeof style === "string" ? style : style?.nombre))
+          .filter((name) => typeof name === "string" && name.trim().length > 0)
+          .map((name) => name.trim())
+      ),
+    ];
+ 
+    stylesCache = { at: Date.now(), names };
+    return names;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+ 
+/** Lista de estilos para mostrar en el chat. Nunca devuelve una lista vacía. */
+const resolveStyleOptions = async () => {
+  try {
+    const names = await getDbStyleNames();
+    if (names.length > 0) return names;
+  } catch (error) {
+    console.warn("No se pudieron cargar los estilos de la base de datos:", error);
+  }
+ 
+  try {
+    const fromArtists = getAvailableStyles(await getArtistsWithTimeout());
+    if (fromArtists.length > 0) return fromArtists;
+  } catch (error) {
+    console.warn("No se pudieron cargar las especialidades de los artistas:", error);
+  }
+ 
+  return STYLE_OPTIONS;
+};
+ 
+const artistKey = (artist) => String(artist?._id ?? artist?.id ?? "");
+ 
+/**
+ * Artistas que trabajan un estilo: los que lo declaran como especialidad
+ * MÁS los que tienen trabajos del portafolio etiquetados con ese estilo.
+ */
+const findArtistsForStyle = async (artists, estilo) => {
+  const result = new Map();
+ 
+  matchArtistsByStyle(artists, estilo).forEach((artist) => {
+    result.set(artistKey(artist), artist);
+  });
+ 
+  try {
+    const items = getPortfolioItems(await getPortfolioWithTimeout());
+ 
+    const artistIds = new Set(
+      items
+        .filter((item) => matchesStyle(item, estilo))
+        .map((item) => String(item?.artist?._id ?? item?.artist ?? ""))
+        .filter(Boolean)
+    );
+ 
+    artists.forEach((artist) => {
+      if (artistIds.has(artistKey(artist))) result.set(artistKey(artist), artist);
+    });
+  } catch (error) {
+    console.warn("No se pudo cruzar el portafolio con el estilo:", error);
+  }
+ 
+  return [...result.values()];
+};
+ 
 const matchesStyle = (item, estilo) => {
-  const target = normalizeForMatch(estilo);
+  const target = normalizeStyle(estilo);
  
   const styles = Array.isArray(item?.styles)
     ? item.styles
@@ -137,7 +226,7 @@ const matchesStyle = (item, estilo) => {
     const styleName =
       typeof style === "string" ? style : style?.nombre;
  
-    return normalizeForMatch(styleName) === target;
+    return normalizeStyle(styleName) === target;
   });
 };
  
@@ -492,7 +581,7 @@ export function useChatEngine({
  
       try {
         const artists = await getArtistsWithTimeout();
-        const matches = matchArtistsByStyle(artists, estilo);
+        const matches = await findArtistsForStyle(artists, estilo);
  
         if (matches.length > 0) {
           const names = matches
@@ -506,7 +595,7 @@ export function useChatEngine({
           );
         } else {
           pushBot(
-            `No encontré artistas registrados con la especialidad ${estilo}.`
+            `No encontré artistas registrados que trabajen con ${estilo}.`
           );
         }
       } catch (error) {
@@ -547,7 +636,7 @@ export function useChatEngine({
     try {
       const artists = await getArtistsWithTimeout();
  
-      candidatos = matchArtistsByStyle(
+      candidatos = await findArtistsForStyle(
         artists,
         selectionRef.current.estilo
       );
@@ -587,18 +676,13 @@ export function useChatEngine({
     setInputEnabled(false);
  
     try {
-      const artists = await getArtistsWithTimeout();
-      const availableStyles = getAvailableStyles(artists);
+      const availableStyles = await resolveStyleOptions();
  
       pushBot(
         `Tamaño: ${selectionRef.current.tamanioLabel} ✓ ¿Qué estilo te interesa?`
       );
  
-      attachOptions(
-        availableStyles.length > 0
-          ? availableStyles
-          : STYLE_OPTIONS
-      );
+      attachOptions(availableStyles);
     } catch (error) {
       console.error("Error al cargar estilos:", error);
  
@@ -1058,10 +1142,13 @@ export function useChatEngine({
       }
  
       // 4. Detectar consultas sobre artistas, estilos y diseños.
+      //    Los estilos reconocidos son los de la base de datos.
+      const knownStyles = await resolveStyleOptions();
+ 
       const artistQuery = findArtistQuery(value);
-      const styleQuery = findStyleQuery(value);
+      const styleQuery = findStyleQuery(value, knownStyles);
       const designQuery = findDesignQuery(value);
-      const mentionedStyle = findMentionedStyle(value);
+      const mentionedStyle = findMentionedStyle(value, knownStyles);
  
       // 5. Consultar artistas.
       if (artistQuery) {
@@ -1071,7 +1158,7 @@ export function useChatEngine({
           const artists = await getArtistsWithTimeout();
  
           const filteredArtists = mentionedStyle
-            ? matchArtistsByStyle(artists, mentionedStyle)
+            ? await findArtistsForStyle(artists, mentionedStyle)
             : artists;
  
           const names = filteredArtists
@@ -1091,7 +1178,7 @@ export function useChatEngine({
           } else {
             pushBot(
               mentionedStyle
-                ? `No encontré artistas registrados con la especialidad ${mentionedStyle}. Puedes consultar por otro estilo.`
+                ? `No encontré artistas registrados que trabajen con ${mentionedStyle}. Puedes consultar por otro estilo.`
                 : "Por ahora no encontré artistas registrados en el sistema."
             );
           }
@@ -1116,23 +1203,14 @@ export function useChatEngine({
         setStep("estilo");
  
         try {
-          const artists = await getArtistsWithTimeout();
-          const availableStyles = getAvailableStyles(artists);
+          const availableStyles = await resolveStyleOptions();
  
-          if (availableStyles.length > 0) {
-            pushBot(
-              `Los estilos registrados actualmente en InkHaus son: ${availableStyles.join(", ")}.`
-            );
-          } else {
-            pushBot(
-              "No encontré estilos registrados en las especialidades de los artistas."
-            );
-          }
+          pushBot(
+            `Los estilos disponibles actualmente en InkHaus son: ${availableStyles.join(", ")}.`
+          );
  
           attachOptions([
-            ...(availableStyles.length > 0
-              ? availableStyles
-              : STYLE_OPTIONS),
+            ...availableStyles,
             CONSULTAR_ARTISTAS,
             CONTINUAR_COTIZACION,
           ]);
@@ -1245,4 +1323,3 @@ export function useChatEngine({
     currentZona: selectionRef.current.zona,
   };
 }
- 

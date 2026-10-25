@@ -109,12 +109,17 @@ export function formatCLP(n) {
   return `$${Number(n).toLocaleString("es-CL")} CLP`;
 }
  
-function normalizeStyle(text) {
+/**
+ * Normaliza el nombre de un estilo para compararlo:
+ * sin acentos, en minúsculas, y con "&" tratado como "and"
+ * (así "Black & Gray", "Black&Gray" y "black and gray" son el mismo estilo).
+ */
+export function normalizeStyle(text) {
   return String(text || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/&/g, " ")
+    .replace(/&/g, " and ")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
@@ -411,10 +416,17 @@ export function findArtistQuery(text) {
   );
 }
  
+function mentionsStyleName(text, style) {
+  const t = ` ${normalizeStyle(text)} `;
+  const s = normalizeStyle(style);
+  return Boolean(s) && t.includes(` ${s} `);
+}
+ 
 /**
  * Devuelve true si el usuario pregunta por los estilos disponibles.
+ * `styles` es la lista de estilos reales (base de datos); por defecto, la lista fija.
  */
-export function findStyleQuery(text) {
+export function findStyleQuery(text, styles = STYLE_OPTIONS) {
   const normalizedText = normalizeFaqText(text);
  
   if (!normalizedText) return false;
@@ -424,10 +436,7 @@ export function findStyleQuery(text) {
   );
  
   // También detecta preguntas como:
-  // "¿Trabajan anime?" o "¿Hacen realismo?"
-  const asksAboutAStyle = STYLE_OPTIONS.some((style) =>
-    matchesFaqKeyword(normalizedText, style)
-  );
+  const asksAboutAStyle = styles.some((style) => mentionsStyleName(text, style));
  
   return asksAboutStyles || asksAboutAStyle;
 }
@@ -446,19 +455,12 @@ export function findDesignQuery(text) {
 }
  
 /**
- * Devuelve el estilo de STYLE_OPTIONS que se menciona en el mensaje.
- * Si no menciona uno, devuelve null.
+ * Devuelve el estilo (de la lista `styles`)
  */
-export function findMentionedStyle(text) {
-  const normalizedText = normalizeFaqText(text);
+export function findMentionedStyle(text, styles = STYLE_OPTIONS) {
+  if (!normalizeStyle(text)) return null;
  
-  if (!normalizedText) return null;
- 
-  return (
-    STYLE_OPTIONS.find((style) =>
-      matchesFaqKeyword(normalizedText, style)
-    ) || null
-  );
+  return styles.find((style) => mentionsStyleName(text, style)) || null;
 }
  
 // ─────────────────────────────────────────────────────────────────────────
