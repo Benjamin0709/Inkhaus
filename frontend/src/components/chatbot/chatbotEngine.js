@@ -3,7 +3,7 @@
 // Datos estáticos + helpers puros (sin React) del chatbot de cotización
 // guiado por planimetría corporal 3D.
 // ─────────────────────────────────────────────────────────────────────────
-
+ 
 export const QUICK_ZONES = [
   "Bíceps",
   "Antebrazo",
@@ -12,7 +12,7 @@ export const QUICK_ZONES = [
   "Muslo",
   "Pantorrilla",
 ];
-
+ 
 export const BASE_SIZE_OPTIONS = [
   { label: "Pequeño (< 5 cm)", value: "pequeño" },
   { label: "Mediano (5–15 cm)", value: "mediano" },
@@ -23,16 +23,16 @@ const ESPALDA_OPTION = {
   label: "Espalda completa",
   value: "espalda_completa",
 };
-
+ 
 export const SIZE_OPTIONS = [
   ...BASE_SIZE_OPTIONS,
   MANGA_OPTION,
   ESPALDA_OPTION,
 ];
-
+ 
 const ARM_ZONES = ["Bíceps", "Antebrazo", "Muñeca"];
 const BACK_ZONES = ["Espalda alta", "Espalda baja"];
-
+ 
 export function getSizeOptionsForZone(zona) {
   const base = zoneBase(zona);
   const opts = [...BASE_SIZE_OPTIONS];
@@ -40,7 +40,7 @@ export function getSizeOptionsForZone(zona) {
   if (BACK_ZONES.includes(base)) opts.push(ESPALDA_OPTION);
   return opts;
 }
-
+ 
 export const SIZE_TO_DB_ENUM = {
   pequeño: "pequeño",
   mediano: "mediano",
@@ -48,7 +48,7 @@ export const SIZE_TO_DB_ENUM = {
   manga: "manga",
   espalda_completa: "espalda_completa",
 };
-
+ 
 export const STYLE_OPTIONS = [
   "Realismo",
   "Black & Gray",
@@ -57,7 +57,7 @@ export const STYLE_OPTIONS = [
   "Anime",
   "Acuarela",
 ];
-
+ 
 export const FALLBACK_PRICES = {
   pequeño: { min: 30000, max: 80000 },
   mediano: { min: 80000, max: 200000 },
@@ -65,7 +65,7 @@ export const FALLBACK_PRICES = {
   manga: { min: 450000, max: 900000 },
   espalda_completa: { min: 500000, max: 1200000 },
 };
-
+ 
 export const ZONE_TIPS = {
   Cabeza:
     "Dolor alto y cicatrización especial — no es la mejor opción para un primer tatuaje.",
@@ -96,19 +96,19 @@ export const ZONE_TIPS = {
   Pie:
     "Dolor alto y cicatrización más lenta por el roce del calzado.",
 };
-
+ 
 export function zoneBase(zona) {
   return (zona || "").replace(/ (izquierd[oa]|derech[oa])$/, "");
 }
-
+ 
 export function getZoneTip(zona) {
   return ZONE_TIPS[zoneBase(zona)] || null;
 }
-
+ 
 export function formatCLP(n) {
   return `$${Number(n).toLocaleString("es-CL")} CLP`;
 }
-
+ 
 function normalizeStyle(text) {
   return String(text || "")
     .normalize("NFD")
@@ -119,22 +119,22 @@ function normalizeStyle(text) {
     .trim()
     .replace(/\s+/g, " ");
 }
-
+ 
 /**
  * Filtra artistas según sus especialidades.
  * Tolera diferencias de mayúsculas, acentos y espacios.
  */
 export function matchArtistsByStyle(artistList, estilo) {
   const target = normalizeStyle(estilo);
-
+ 
   if (!target) return [];
-
+ 
   return (artistList || []).filter((artist) =>
     (Array.isArray(artist.especialidades) ? artist.especialidades : [])
       .some((especialidad) => normalizeStyle(especialidad) === target)
   );
 }
-
+ 
 /**
  * Construye una URL para consultar el portafolio de un artista.
  */
@@ -144,9 +144,9 @@ export function portfolioUrlForArtist(artist) {
   if (artist?.nombre) params.set("artistName", artist.nombre);
   return `/?${params.toString()}#portfolio`;
 }
-
+ 
 export const CAMBIAR_ZONA = "Elegir otra zona";
-
+ 
 export const STEPS = [
   "welcome",
   "zona",
@@ -155,9 +155,9 @@ export const STEPS = [
   "artista",
   "cotizacion",
 ];
-
+ 
 export const TOTAL_STEPS = STEPS.length;
-
+ 
 // ─────────────────────────────────────────────────────────────────────────
 // BASE DE CONOCIMIENTO: PREGUNTAS FRECUENTES
 // ─────────────────────────────────────────────────────────────────────────
@@ -282,6 +282,23 @@ export const FAQ_KB = [
   },
   {
     keywords: [
+      "que mas puedes responder",
+      "que puedes responder",
+      "que mas sabes",
+      "que sabes",
+      "que puedes hacer",
+      "que mas puedes hacer",
+      "que sabes hacer",
+      "en que me puedes ayudar",
+      "en que me ayudas",
+      "como me puedes ayudar",
+      "como funcionas",
+    ],
+    answer:
+      "Puedo ayudarte con: \n• Cotizar un tatuaje eligiendo la zona en el modelo 3D, el tamaño y el estilo.\n• Mostrarte los artistas de InkHaus y sus estilos.\n• Orientarte sobre diseños y portafolios.\n• Resolver dudas frecuentes: dolor, cuidados, anticipo, horarios, ubicación, edad, retoques, cover-ups y duración de la sesión.\nSi preguntas algo que no sé, puedo ponerte en contacto con el equipo.",
+  },
+  {
+    keywords: [
       "diseño propio",
       "mi propio diseño",
       "traigo mi diseño",
@@ -291,11 +308,11 @@ export const FAQ_KB = [
       "¡Por supuesto! Puedes traer tu propio diseño o referencia, y el artista lo adapta a su estilo y a la anatomía de la zona elegida. Te confirmará si es posible hacerlo antes de tatuarlo.",
   },
 ];
-
+ 
 // ─────────────────────────────────────────────────────────────────────────
 // NORMALIZACIÓN Y COINCIDENCIA DE TEXTO
 // ─────────────────────────────────────────────────────────────────────────
-
+ 
 function normalizeFaqText(text) {
   return String(text || "")
     .normalize("NFD")
@@ -305,40 +322,40 @@ function normalizeFaqText(text) {
     .replace(/\s+/g, " ")
     .trim();
 }
-
+ 
 function matchesFaqKeyword(text, keyword) {
   const normalizedKeyword = normalizeFaqText(keyword);
-
+ 
   if (!normalizedKeyword) return false;
-
+ 
   return (` ${text} `).includes(` ${normalizedKeyword} `);
 }
-
+ 
 /**
  * Busca una respuesta en las preguntas frecuentes.
  * Devuelve null si no encuentra coincidencias.
  */
 export function findFaqAnswer(text) {
   const normalizedText = normalizeFaqText(text);
-
+ 
   if (!normalizedText) return null;
-
+ 
   for (const item of FAQ_KB) {
     const matches = item.keywords.some((keyword) =>
       matchesFaqKeyword(normalizedText, keyword)
     );
-
+ 
     if (matches) return item.answer;
   }
-
+ 
   return null;
 }
-
+ 
 // ─────────────────────────────────────────────────────────────────────────
 // DETECCIÓN DE CONSULTAS SOBRE ARTISTAS, ESTILOS Y DISEÑOS
 // Estas funciones reconocen intenciones; no llaman a las API.
 // ─────────────────────────────────────────────────────────────────────────
-
+ 
 const ARTIST_QUERY_KEYWORDS = [
   "artista",
   "artistas",
@@ -352,7 +369,7 @@ const ARTIST_QUERY_KEYWORDS = [
   "equipo de tatuadores",
   "equipo de artistas",
 ];
-
+ 
 const STYLE_QUERY_KEYWORDS = [
   "estilo",
   "estilos",
@@ -363,7 +380,7 @@ const STYLE_QUERY_KEYWORDS = [
   "tecnicas de tatuaje",
   "tecnica de tatuaje",
 ];
-
+ 
 const DESIGN_QUERY_KEYWORDS = [
   "diseño",
   "diseños",
@@ -380,74 +397,74 @@ const DESIGN_QUERY_KEYWORDS = [
   "ideas para tatuajes",
   "inspiracion",
 ];
-
+ 
 /**
  * Devuelve true si el usuario pregunta por los artistas del estudio.
  */
 export function findArtistQuery(text) {
   const normalizedText = normalizeFaqText(text);
-
+ 
   if (!normalizedText) return false;
-
+ 
   return ARTIST_QUERY_KEYWORDS.some((keyword) =>
     matchesFaqKeyword(normalizedText, keyword)
   );
 }
-
+ 
 /**
  * Devuelve true si el usuario pregunta por los estilos disponibles.
  */
 export function findStyleQuery(text) {
   const normalizedText = normalizeFaqText(text);
-
+ 
   if (!normalizedText) return false;
-
+ 
   const asksAboutStyles = STYLE_QUERY_KEYWORDS.some((keyword) =>
     matchesFaqKeyword(normalizedText, keyword)
   );
-
+ 
   // También detecta preguntas como:
   // "¿Trabajan anime?" o "¿Hacen realismo?"
   const asksAboutAStyle = STYLE_OPTIONS.some((style) =>
     matchesFaqKeyword(normalizedText, style)
   );
-
+ 
   return asksAboutStyles || asksAboutAStyle;
 }
-
+ 
 /**
  * Devuelve true si el usuario quiere ver diseños o referencias.
  */
 export function findDesignQuery(text) {
   const normalizedText = normalizeFaqText(text);
-
+ 
   if (!normalizedText) return false;
-
+ 
   return DESIGN_QUERY_KEYWORDS.some((keyword) =>
     matchesFaqKeyword(normalizedText, keyword)
   );
 }
-
+ 
 /**
  * Devuelve el estilo de STYLE_OPTIONS que se menciona en el mensaje.
  * Si no menciona uno, devuelve null.
  */
 export function findMentionedStyle(text) {
   const normalizedText = normalizeFaqText(text);
-
+ 
   if (!normalizedText) return null;
-
+ 
   return (
     STYLE_OPTIONS.find((style) =>
       matchesFaqKeyword(normalizedText, style)
     ) || null
   );
 }
-
+ 
 // ─────────────────────────────────────────────────────────────────────────
 // RESPUESTAS DE CONVERSACIÓN COTIDIANA
 // ─────────────────────────────────────────────────────────────────────────
-
+ 
 export const SMALL_TALK = [
   {
     keywords: ["hola", "holi", "holaa", "holaaa", "buenas"],
@@ -490,26 +507,26 @@ export const SMALL_TALK = [
       "¡Hasta pronto! Gracias por contactar a InkHaus. ¡Que tengas un excelente día!",
   },
 ];
-
+ 
 /**
  * Busca respuestas de conversación cotidiana.
  */
 export function findSmallTalkAnswer(text) {
   const normalizedText = normalizeFaqText(text);
-
+ 
   if (!normalizedText) return null;
-
+ 
   for (const item of SMALL_TALK) {
     const matches = item.keywords.some((keyword) =>
       matchesFaqKeyword(normalizedText, keyword)
     );
-
+ 
     if (matches) return item.answer;
   }
-
+ 
   return null;
 }
-
+ 
 // ─────────────────────────────────────────────────────────────────────────
 // DETECCIÓN DE INTENCIÓN DE COTIZACIÓN
 // ─────────────────────────────────────────────────────────────────────────
@@ -529,9 +546,9 @@ export const QUOTE_KEYWORDS = [
   "tarifa",
   "cuanto es",
 ];
-
+ 
 export function isQuoteIntent(text) {
   const t = normalizeFaqText(text);
-
+ 
   return QUOTE_KEYWORDS.some((keyword) => t.includes(keyword));
 }

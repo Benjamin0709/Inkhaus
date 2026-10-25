@@ -101,6 +101,24 @@ router.get("/conversations/me", auth, async (req, res) => {
   }
 });
 
+// ── Todas las conversaciones (solo admin: supervisión) ───────────────
+// Incluye las dirigidas a artistas y las de la bandeja del equipo.
+router.get("/conversations/all", auth, async (req, res) => {
+  try {
+    if (!req.auth.roles.includes("admin")) {
+      return res.status(403).json({ success: false, message: "No autorizado" });
+    }
+    const conversations = await Conversation.find({})
+      .populate("cliente", "name email")
+      .populate("artista", "nombre_artistico foto_url")
+      .sort({ ultima_actividad: -1 })
+      .limit(500);
+    res.json({ success: true, info: conversations });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
 // ── Mensajes de una conversación ─────────────────────────────────────
 router.get("/conversations/:id/messages", auth, async (req, res) => {
   try {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatCLP } from "./chatbotEngine";
 import { assetUrl } from "../../utils/assetUrl";
+import SafeImage from "../ui/SafeImage";
 
 function QuoteCard({ quote }) {
   return (
@@ -28,9 +29,12 @@ function GalleryRow({ items }) {
     <div className="flex gap-2 overflow-x-auto max-w-[92%] pb-1">
       {items.map((it, i) => (
         <div key={i} className="flex-shrink-0 w-20 h-20 overflow-hidden border rounded-md border-white/10 bg-ink2">
-          {it.imagen_url && (
-            <img src={assetUrl(it.imagen_url)} alt={it.titulo} className="object-cover w-full h-full" />
-          )}
+          <SafeImage
+            src={it.imagen_url}
+            alt={it.titulo}
+            className="object-cover w-full h-full"
+            fallback={<div className="flex items-center justify-center w-full h-full px-1 text-[9px] text-center text-muted">Sin imagen</div>}
+          />
         </div>
       ))}
     </div>

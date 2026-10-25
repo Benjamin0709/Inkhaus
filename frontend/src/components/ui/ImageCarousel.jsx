@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { assetUrl } from "../../utils/assetUrl";
+import SafeImage from "./SafeImage";
 
 export default function ImageCarousel({ images = [], alt = "", className = "", intervalMs = 5000 }) {
   const [index, setIndex] = useState(0);
@@ -48,13 +49,20 @@ export default function ImageCarousel({ images = [], alt = "", className = "", i
       onTouchEnd={handleTouchEnd}
     >
       {images.map((src, i) => (
-        <img
+        <SafeImage
           key={src + i}
-          src={assetUrl(src)}
+          src={src}
           alt={alt}
           className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
             i === index ? "opacity-100" : "opacity-0"
           }`}
+          fallback={
+            i === index ? (
+              <div className="absolute inset-0 flex items-center justify-center text-xs bg-ink2 text-muted">
+                Imagen no disponible
+              </div>
+            ) : null
+          }
         />
       ))}
       {images.length > 1 && (

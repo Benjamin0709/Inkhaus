@@ -11,3 +11,11 @@ export function assetUrl(url) {
   if (/^(https?:)?\/\//i.test(url) || url.startsWith("data:") || url.startsWith("blob:")) return url;
   return url.startsWith("/") ? `${API_URL}${url}` : url;
 }
+
+/**
+ * Cloudinary: el backend agrega "f_auto,q_auto" al subir. Si la cuenta tiene
+ * "Strict transformations" activado, esa URL devuelve error; la original sí funciona.
+ */
+export function withoutCloudinaryTransform(url) {
+  return typeof url === "string" ? url.replace("/image/upload/f_auto,q_auto/", "/image/upload/") : url;
+}

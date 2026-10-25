@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getUnansweredQueriesAPI, updateUnansweredQueryAPI } from "../../api/chatbotQuery.api";
+import AdminConversations from "../../components/livechat/AdminConversations";
 
 export default function ReportsPage() {
   const [queries, setQueries] = useState([]);
@@ -147,17 +148,8 @@ export default function ReportsPage() {
       </section>
 
       {/* ── Mensajes directos a artistas (chat en vivo) ─────────────── */}
-      <section>
-        <h2 className="pb-3 mb-6 text-2xl tracking-wider border-b font-display border-paper/10">
-          Mensajes directos a artistas
-        </h2>
-        <div className="p-8 border cursor-not-allowed border-paper/10 opacity-40">
-          <div className="mb-2 text-xl tracking-wider font-display">Chat en vivo</div>
-          <div className="text-xs tracking-widest uppercase text-muted">
-            Próximamente — requiere el sistema de mensajería en tiempo real
+
+            <AdminConversations />
           </div>
-        </div>
-      </section>
-    </div>
-  );
-}
+        );
+      }

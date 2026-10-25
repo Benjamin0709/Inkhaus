@@ -4,7 +4,9 @@ import { getConversationMessagesAPI, sendConversationMessageAPI } from "../../ap
 
 const POLL_MS = 4000;
 
-export default function ConversationThread({ conversationId, onSent }) {
+// readOnly: vista de supervisión (admin). Sin caja de texto, muestra quién escribió cada mensaje
+// y alinea a la derecha lo que escribe el personal (artista/admin).
+export default function ConversationThread({ conversationId, onSent, readOnly = false }) {
   const { user } = useAuth();
   const myId = user?.id || user?._id;
   const [messages, setMessages] = useState([]);
@@ -48,10 +50,12 @@ export default function ConversationThread({ conversationId, onSent }) {
     <div className="flex flex-col h-full">
       <div ref={scrollRef} className="flex-1 p-4 space-y-2 overflow-y-auto">
         {messages.length === 0 && (
-          <p className="mt-6 text-xs text-center text-muted">Escribe el primer mensaje de esta conversación.</p>
+          <p className="mt-6 text-xs text-center text-muted">
+            {readOnly ? "Esta conversación aún no tiene mensajes." : "Escribe el primer mensaje de esta conversación."}
+          </p>
         )}
         {messages.map((m) => {
-          const propio = (m.emisor?._id || m.emisor) === myId;
+          const propio = readOnly ? m.emisor_rol !== "cliente" : (m.emisor?._id || m.emisor) === myId;
           return (
             <div key={m._id} className={`flex flex-col ${propio ? "items-end" : "items-start"}`}>
               <div className={`max-w-[80%] px-3 py-2 rounded-xl text-[13px] leading-relaxed ${
@@ -60,12 +64,14 @@ export default function ConversationThread({ conversationId, onSent }) {
                 {m.texto}
               </div>
               <span className="text-[9px] text-muted mt-0.5">
+                {readOnly && `${m.emisor?.name || "—"} (${m.emisor_rol}) · `}
                 {new Date(m.createdAt).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" })}
               </span>
             </div>
           );
         })}
       </div>
+      {!readOnly && (
       <div className="flex items-center gap-2 p-3 border-t border-white/10">
         <input
           value={text}
@@ -79,6 +85,7 @@ export default function ConversationThread({ conversationId, onSent }) {
           Enviar
         </button>
       </div>
+      )}
     </div>
   );
 }
